@@ -1,0 +1,87 @@
+<?php
+
+namespace App\Events;
+
+use App\Models\Task;
+use App\Models\User;
+use Illuminate\Broadcasting\InteractsWithSockets;
+use Illuminate\Broadcasting\PrivateChannel;
+use Illuminate\Contracts\Broadcasting\ShouldBroadcast;
+use Illuminate\Foundation\Events\Dispatchable;
+use Illuminate\Queue\SerializesModels;
+
+class TaskCreated implements ShouldBroadcast
+{
+    use Dispatchable, InteractsWithSockets, SerializesModels;
+
+    /**
+     * The task that was created.
+     */
+    public Task $task;
+
+    /**
+     * The user who created the task.
+     */
+    public User $creator;
+
+    /**
+     * Create a new event instance.
+     *
+     * @param Task $task
+     * @param User $creator
+     */
+    public function __construct(Task $task, User $creator)
+    {
+        $this->task = $task;
+        $this->creator = $creator;
+    }
+
+    /**
+     * Get the channels the event should broadcast on.
+     *
+     * @return array<int, \Illuminate\Broadcasting\Channel>
+     */
+    public function broadcastOn(): array
+    {
+        return [
+            // Broadcast to the assignee's private channel
+            new PrivateChannel('user.' . $this->task->assignee_id),
+            // Broadcast to admin channel
+            new PrivateChannel('admin'),
+        ];
+    }
+
+    /**
+     * Get the data to broadcast.
+     *
+     * @return array
+     */
+    public function broadcastWith(): array
+    {
+        return [
+            'task' => [
+                'id' => $this->task->id,
+                'title' => $this->task->title,
+                'status' => $this->task->status,
+                'priority' => $this->task->priority,
+                'due_date' => $this->task->due_date?->toDateString(),
+                'due_time' => $this->task->due_time,
+            ],
+            'creator' => [
+                'id' => $this->creator->id,
+                'name' => $this->creator->name,
+            ],
+            'message' => "Nueva tarea asignada: {$this->task->title}",
+        ];
+    }
+
+    /**
+     * The event's broadcast name.
+     *
+     * @return string
+     */
+    public function broadcastAs(): string
+    {
+        return 'task.created';
+    }
+}
