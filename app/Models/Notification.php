@@ -41,6 +41,7 @@ class Notification extends Model
         'type',
         'status',
         'sent_at',
+        'read_at',
         'failure_reason',
         'retry_count',
     ];
@@ -54,6 +55,7 @@ class Notification extends Model
     {
         return [
             'sent_at' => 'datetime',
+            'read_at' => 'datetime',
             'retry_count' => 'integer',
         ];
     }
@@ -126,5 +128,39 @@ class Notification extends Model
             'failure_reason' => $reason,
             'retry_count' => $this->retry_count + 1,
         ]);
+    }
+
+    /**
+     * Mark notification as read.
+     *
+     * @return bool
+     */
+    public function markAsRead(): bool
+    {
+        return $this->update([
+            'read_at' => now(),
+        ]);
+    }
+
+    /**
+     * Scope a query to only include unread notifications.
+     *
+     * @param Builder $query
+     * @return Builder
+     */
+    public function scopeUnread(Builder $query): Builder
+    {
+        return $query->whereNull('read_at');
+    }
+
+    /**
+     * Scope a query to only include read notifications.
+     *
+     * @param Builder $query
+     * @return Builder
+     */
+    public function scopeRead(Builder $query): Builder
+    {
+        return $query->whereNotNull('read_at');
     }
 }

@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Api\AuthController;
+use App\Http\Controllers\Api\NotificationController;
 use App\Http\Controllers\Api\PushNotificationController;
 use App\Http\Controllers\Api\TaskController;
 use App\Http\Controllers\Api\UserController;
@@ -45,6 +46,13 @@ Route::prefix('v1')->middleware('auth:sanctum')->group(function () {
     Route::delete('users/{user}', [UserController::class, 'destroy'])
         ->middleware('permission:manage-users')
         ->name('api.users.destroy');
+
+    // Notifications routes
+    Route::prefix('notifications')->controller(NotificationController::class)->group(function () {
+        Route::get('/', 'index')->name('api.notifications.index');
+        Route::post('mark-all-read', 'markAllAsRead')->name('api.notifications.mark-all-read');
+        Route::patch('{id}/read', 'markAsRead')->name('api.notifications.mark-as-read');
+    });
 
     // Push notifications routes
     Route::prefix('push')->controller(PushNotificationController::class)->group(function () {
