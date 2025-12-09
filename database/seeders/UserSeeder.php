@@ -17,6 +17,7 @@ class UserSeeder extends Seeder
         // Create Admin user
         $admin = User::create([
             'phone' => '+573001111111',
+            'email' => 'admin@taskmanager.local',
             'name' => 'Admin Test',
             'password' => 'Admin123!',
             'role' => 'Admin',
@@ -30,11 +31,13 @@ class UserSeeder extends Seeder
         $supervisors = [
             [
                 'phone' => '+573002222222',
+                'email' => 'supervisor1@taskmanager.local',
                 'name' => 'Supervisor 1',
                 'password' => 'Super123!',
             ],
             [
                 'phone' => '+573003333333',
+                'email' => 'supervisor2@taskmanager.local',
                 'name' => 'Supervisor 2',
                 'password' => 'Super123!',
             ],
@@ -43,6 +46,7 @@ class UserSeeder extends Seeder
         foreach ($supervisors as $supervisorData) {
             $supervisor = User::create([
                 'phone' => $supervisorData['phone'],
+                'email' => $supervisorData['email'],
                 'name' => $supervisorData['name'],
                 'password' => $supervisorData['password'],
                 'role' => 'Supervisor',
@@ -57,6 +61,7 @@ class UserSeeder extends Seeder
         for ($i = 4; $i <= 8; $i++) {
             $operador = User::create([
                 'phone' => '+57300444444' . $i,
+                'email' => 'operador' . ($i - 3) . '@taskmanager.local',
                 'name' => 'Operador ' . ($i - 3),
                 'password' => 'Opera123!',
                 'role' => 'Operador',
