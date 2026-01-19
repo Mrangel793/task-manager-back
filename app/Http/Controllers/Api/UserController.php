@@ -66,6 +66,7 @@ class UserController extends Controller
                 $search = $request->search;
                 $query->where(function ($q) use ($search) {
                     $q->where('name', 'like', "%{$search}%")
+                        ->orWhere('email', 'like', "%{$search}%")
                         ->orWhere('phone', 'like', "%{$search}%");
                 });
             }
@@ -95,6 +96,7 @@ class UserController extends Controller
         try {
             // Create user
             $user = User::create([
+                'email' => $request->email,
                 'phone' => $request->phone,
                 'name' => $request->name,
                 'password' => $request->password,
@@ -195,6 +197,10 @@ class UserController extends Controller
         try {
             // Prepare update data
             $updateData = [];
+
+            if ($request->has('email')) {
+                $updateData['email'] = $request->email;
+            }
 
             if ($request->has('name')) {
                 $updateData['name'] = $request->name;

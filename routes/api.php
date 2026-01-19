@@ -69,7 +69,7 @@ Route::prefix('v1')->middleware('auth:sanctum')->group(function () {
     Route::post('tasks', [TaskController::class, 'store'])
         ->middleware('permission:create-tasks')
         ->name('api.tasks.store');
-    Route::patch('tasks/{task}', [TaskController::class, 'update'])
+    Route::match(['patch', 'put'], 'tasks/{task}', [TaskController::class, 'update'])
         ->middleware('check.task.permissions')
         ->name('api.tasks.update');
     Route::delete('tasks/{task}', [TaskController::class, 'destroy'])
@@ -83,8 +83,8 @@ Route::prefix('v1')->middleware('auth:sanctum')->group(function () {
         ->name('api.tasks.history');
 });
 
-// WhatsApp Command Routes (N8n integration)
-Route::prefix('whatsapp/commands')->middleware('n8n.auth')->controller(WhatsAppCommandController::class)->group(function () {
+// WhatsApp Command Routes (N8n integration) - NO requiere auth:sanctum, usa n8n.auth
+Route::prefix('v1/whatsapp/commands')->middleware('n8n.auth')->controller(WhatsAppCommandController::class)->group(function () {
     Route::post('help', 'help')->name('api.whatsapp.commands.help');
     Route::post('list-tasks', 'listTasks')->name('api.whatsapp.commands.list-tasks');
     Route::post('get-task', 'getTask')->name('api.whatsapp.commands.get-task');

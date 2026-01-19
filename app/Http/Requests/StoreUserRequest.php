@@ -24,8 +24,15 @@ class StoreUserRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'phone' => [
+            'email' => [
                 'required',
+                'string',
+                'email',
+                'max:255',
+                'unique:users,email',
+            ],
+            'phone' => [
+                'nullable',
                 'string',
                 'unique:users,phone',
                 'regex:/^\+[1-9]\d{1,14}$/', // E.164 format
@@ -73,7 +80,11 @@ class StoreUserRequest extends FormRequest
     public function messages(): array
     {
         return [
-            'phone.required' => 'El número de teléfono es obligatorio.',
+            'email.required' => 'El correo electrónico es obligatorio.',
+            'email.email' => 'El correo electrónico debe ser una dirección válida.',
+            'email.unique' => 'Este correo electrónico ya está registrado.',
+            'email.max' => 'El correo electrónico no puede exceder :max caracteres.',
+
             'phone.unique' => 'Este número de teléfono ya está registrado.',
             'phone.regex' => 'El formato del número de teléfono debe ser E.164 (ejemplo: +573001234567).',
 

@@ -35,6 +35,13 @@ class UpdateUserRequest extends FormRequest
         $userId = $this->route('user')->id;
 
         return [
+            'email' => [
+                'sometimes',
+                'string',
+                'email',
+                'max:255',
+                Rule::unique('users', 'email')->ignore($userId),
+            ],
             'name' => [
                 'sometimes',
                 'string',
@@ -44,6 +51,7 @@ class UpdateUserRequest extends FormRequest
             ],
             'phone' => [
                 'sometimes',
+                'nullable',
                 'string',
                 Rule::unique('users', 'phone')->ignore($userId),
                 'regex:/^\+[1-9]\d{1,14}$/', // E.164 format
@@ -102,6 +110,10 @@ class UpdateUserRequest extends FormRequest
     public function messages(): array
     {
         return [
+            'email.email' => 'El correo electrónico debe ser una dirección válida.',
+            'email.unique' => 'Este correo electrónico ya está registrado.',
+            'email.max' => 'El correo electrónico no puede exceder :max caracteres.',
+
             'name.min' => 'El nombre debe tener al menos :min caracteres.',
             'name.max' => 'El nombre no puede exceder :max caracteres.',
             'name.regex' => 'El nombre solo puede contener letras y espacios.',

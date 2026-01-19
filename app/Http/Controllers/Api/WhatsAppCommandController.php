@@ -33,6 +33,32 @@ class WhatsAppCommandController extends Controller
     }
 
     /**
+     * Resolve user from request - supports both Bearer token and whatsapp_phone.
+     *
+     * @param Request $request
+     * @return User|null
+     */
+    protected function resolveUser(Request $request): ?User
+    {
+        // Priority 1: If Bearer token is provided, authenticate with Sanctum
+        if ($request->bearerToken()) {
+            $user = \Laravel\Sanctum\PersonalAccessToken::findToken($request->bearerToken());
+            if ($user && $user->tokenable) {
+                return $user->tokenable;
+            }
+        }
+
+        // Priority 2: If whatsapp_phone is provided, find user by that
+        if ($request->has('whatsapp_phone')) {
+            return User::where('whatsapp_phone', $request->whatsapp_phone)
+                ->where('whatsapp_verified', true)
+                ->first();
+        }
+
+        return null;
+    }
+
+    /**
      * Get help information about available commands.
      *
      * @param Request $request
@@ -79,23 +105,9 @@ class WhatsAppCommandController extends Controller
      */
     public function listTasks(Request $request): JsonResponse
     {
-        $validator = Validator::make($request->all(), [
-            'whatsapp_phone' => 'required|string',
-        ]);
-
-        if ($validator->fails()) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Error de validación: ' . $validator->errors()->first(),
-                'data' => null,
-            ], 400);
-        }
-
         try {
-            // Find user by WhatsApp phone
-            $user = User::where('whatsapp_phone', $request->whatsapp_phone)
-                ->where('whatsapp_verified', true)
-                ->first();
+            // Resolve user from token or whatsapp_phone
+            $user = $this->resolveUser($request);
 
             if (!$user) {
                 return response()->json([
@@ -105,24 +117,46 @@ class WhatsAppCommandController extends Controller
                 ], 404);
             }
 
-            // Get user's pending and in-progress tasks (max 10)
-            $tasks = Task::where('assignee_id', $user->id)
-                ->whereIn('status', ['Pendiente', 'En Progreso'])
-                ->orderBy('due_date', 'asc')
+            // Build query with RBAC logic
+            $query = Task::with('assignee:id,name')
+                ->whereIn('status', ['Pendiente', 'En Progreso']);
+
+            // Apply RBAC logic based on user role
+            if ($user->hasRole('Admin')) {
+                // Admin can see all tasks
+            } elseif ($user->hasRole('Supervisor')) {
+                // Supervisor can see their tasks + tasks assigned to Operadores
+                $operadorIds = User::role('Operador')->pluck('id');
+                $query->where(function ($q) use ($user, $operadorIds) {
+                    $q->where('assignee_id', $user->id)
+                      ->orWhereIn('assignee_id', $operadorIds);
+                });
+            } else {
+                // Operador can only see their assigned tasks
+                $query->where('assignee_id', $user->id);
+            }
+
+            // Get tasks (max 15)
+            $tasks = $query->orderBy('due_date', 'asc')
                 ->orderBy('due_time', 'asc')
-                ->orderBy('priority', 'desc')
-                ->limit(10)
-                ->get(['id', 'title', 'status', 'priority', 'due_date', 'due_time']);
+                ->orderByRaw("FIELD(priority, 'Alta', 'Media', 'Baja')")
+                ->limit(15)
+                ->get(['id', 'title', 'status', 'priority', 'due_date', 'due_time', 'assignee_id']);
 
             if ($tasks->isEmpty()) {
                 return response()->json([
                     'success' => true,
-                    'message' => '✅ No tienes tareas pendientes en este momento.',
+                    'message' => '✅ No hay tareas pendientes en este momento.',
                     'data' => ['tasks' => []],
                 ]);
             }
 
-            $message = "📋 *Tus Tareas:*\n\n";
+            // Build message based on role
+            $roleLabel = $user->hasRole('Admin') ? 'Todas las Tareas' :
+                        ($user->hasRole('Supervisor') ? 'Tareas del Equipo' : 'Tus Tareas');
+            $message = "📋 *{$roleLabel}:*\n\n";
+            $showAssignee = $user->hasRole('Admin') || $user->hasRole('Supervisor');
+
             foreach ($tasks as $index => $task) {
                 $priorityEmoji = match ($task->priority) {
                     'Alta' => '🔴',
@@ -137,14 +171,19 @@ class WhatsAppCommandController extends Controller
                     ? $task->due_date->format('d/m/Y') . ($task->due_time ? ' ' . $task->due_time : '')
                     : 'Sin fecha';
 
+                $assigneeInfo = $showAssignee && $task->assignee
+                    ? "\n   👤 " . $task->assignee->name
+                    : '';
+
                 $message .= sprintf(
-                    "%d. %s %s *[%s]*\n   %s\n   📅 %s\n\n",
+                    "%d. %s %s *[%s]*\n   %s\n   📅 %s%s\n\n",
                     $index + 1,
                     $statusEmoji,
                     $priorityEmoji,
                     $task->id,
                     $task->title,
-                    $dueInfo
+                    $dueInfo,
+                    $assigneeInfo
                 );
             }
 
@@ -161,6 +200,10 @@ class WhatsAppCommandController extends Controller
                         'priority' => $task->priority,
                         'due_date' => $task->due_date?->format('Y-m-d'),
                         'due_time' => $task->due_time,
+                        'assignee' => $task->assignee ? [
+                            'id' => $task->assignee->id,
+                            'name' => $task->assignee->name,
+                        ] : null,
                     ]),
                 ],
             ]);
@@ -176,7 +219,7 @@ class WhatsAppCommandController extends Controller
     }
 
     /**
-     * Get task details.
+     * Get task details by ID or search by name.
      *
      * @param Request $request
      * @return JsonResponse
@@ -184,8 +227,8 @@ class WhatsAppCommandController extends Controller
     public function getTask(Request $request): JsonResponse
     {
         $validator = Validator::make($request->all(), [
-            'whatsapp_phone' => 'required|string',
-            'task_id' => 'required|string',
+            'task_id' => 'nullable|string',
+            'search' => 'nullable|string|min:3',
         ]);
 
         if ($validator->fails()) {
@@ -196,32 +239,116 @@ class WhatsAppCommandController extends Controller
             ], 400);
         }
 
+        // Require at least one parameter
+        if (!$request->task_id && !$request->search) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Debes proporcionar task_id o search (mínimo 3 caracteres).',
+                'data' => null,
+            ], 400);
+        }
+
         try {
-            // Find user by WhatsApp phone
-            $user = User::where('whatsapp_phone', $request->whatsapp_phone)
-                ->where('whatsapp_verified', true)
-                ->first();
+            // Resolve user from token or whatsapp_phone
+            $user = $this->resolveUser($request);
 
             if (!$user) {
                 return response()->json([
                     'success' => false,
-                    'message' => 'Usuario no encontrado o WhatsApp no verificado.',
+                    'message' => 'Usuario no encontrado. Proporcione token o whatsapp_phone válido.',
                     'data' => null,
                 ], 404);
             }
 
-            // Find task assigned to user
-            $task = Task::with(['assignee', 'creator'])
-                ->where('id', $request->task_id)
-                ->where('assignee_id', $user->id)
-                ->first();
+            // Build base query with RBAC
+            $query = Task::with(['assignee', 'creator']);
 
-            if (!$task) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Tarea no encontrada o no tienes acceso a ella.',
-                    'data' => null,
-                ], 404);
+            // Apply RBAC logic based on user role
+            if ($user->hasRole('Admin')) {
+                // Admin can see all tasks
+            } elseif ($user->hasRole('Supervisor')) {
+                // Supervisor can see their tasks + tasks assigned to Operadores
+                $operadorIds = User::role('Operador')->pluck('id');
+                $query->where(function ($q) use ($user, $operadorIds) {
+                    $q->where('assignee_id', $user->id)
+                      ->orWhereIn('assignee_id', $operadorIds);
+                });
+            } else {
+                // Operador can only see their assigned tasks
+                $query->where('assignee_id', $user->id);
+            }
+
+            // Search by ID or by name
+            if ($request->task_id) {
+                // Direct search by ID
+                $task = $query->where('id', $request->task_id)->first();
+
+                if (!$task) {
+                    return response()->json([
+                        'success' => false,
+                        'message' => 'Tarea no encontrada o no tienes acceso a ella.',
+                        'data' => null,
+                    ], 404);
+                }
+            } else {
+                // Search by name/title
+                $searchTerm = $request->search;
+                $tasks = $query->where('title', 'LIKE', "%{$searchTerm}%")
+                    ->orderBy('due_date', 'asc')
+                    ->limit(10)
+                    ->get();
+
+                if ($tasks->isEmpty()) {
+                    return response()->json([
+                        'success' => false,
+                        'message' => "🔍 No se encontraron tareas con '{$searchTerm}'.",
+                        'data' => null,
+                    ], 404);
+                }
+
+                // If multiple tasks found, return list for user to choose
+                if ($tasks->count() > 1) {
+                    $message = "🔍 *Se encontraron {$tasks->count()} tareas:*\n\n";
+
+                    foreach ($tasks as $index => $t) {
+                        $statusEmoji = match ($t->status) {
+                            'Pendiente' => '⏸️',
+                            'En Progreso' => '▶️',
+                            'Completada' => '✅',
+                            'Cancelada' => '❌',
+                            default => '⚪',
+                        };
+
+                        $message .= sprintf(
+                            "%d. %s *[%s]*\n   %s\n   👤 %s\n\n",
+                            $index + 1,
+                            $statusEmoji,
+                            $t->id,
+                            $t->title,
+                            $t->assignee->name ?? 'Sin asignar'
+                        );
+                    }
+
+                    $message .= "_Usa el ID completo para ver detalles._";
+
+                    return response()->json([
+                        'success' => true,
+                        'message' => $message,
+                        'data' => [
+                            'multiple_results' => true,
+                            'count' => $tasks->count(),
+                            'tasks' => $tasks->map(fn($t) => [
+                                'id' => $t->id,
+                                'title' => $t->title,
+                                'status' => $t->status,
+                                'assignee' => $t->assignee ? $t->assignee->name : null,
+                            ]),
+                        ],
+                    ]);
+                }
+
+                // Only one task found
+                $task = $tasks->first();
             }
 
             $priorityEmoji = match ($task->priority) {
@@ -305,9 +432,8 @@ class WhatsAppCommandController extends Controller
     public function startTask(Request $request): JsonResponse
     {
         $validator = Validator::make($request->all(), [
-            'whatsapp_phone' => 'required|string',
             'task_id' => 'required|string',
-            'message_id' => 'required|string',
+            'message_id' => 'nullable|string',
         ]);
 
         if ($validator->fails()) {
@@ -319,29 +445,29 @@ class WhatsAppCommandController extends Controller
         }
 
         try {
-            return DB::transaction(function () use ($request) {
-                // Check for idempotency
-                $existingMessage = WhatsAppMessage::where('message_id', $request->message_id)->first();
-                if ($existingMessage) {
-                    Log::info("Duplicate message detected: {$request->message_id}");
-                    return response()->json([
-                        'success' => true,
-                        'message' => '✅ Esta acción ya fue procesada anteriormente.',
-                        'data' => ['already_processed' => true],
-                    ]);
-                }
+            // Resolve user from token or whatsapp_phone
+            $user = $this->resolveUser($request);
 
-                // Find user by WhatsApp phone
-                $user = User::where('whatsapp_phone', $request->whatsapp_phone)
-                    ->where('whatsapp_verified', true)
-                    ->first();
+            if (!$user) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Usuario no encontrado. Proporcione token o whatsapp_phone válido.',
+                    'data' => null,
+                ], 404);
+            }
 
-                if (!$user) {
-                    return response()->json([
-                        'success' => false,
-                        'message' => 'Usuario no encontrado o WhatsApp no verificado.',
-                        'data' => null,
-                    ], 404);
+            return DB::transaction(function () use ($request, $user) {
+                // Check for idempotency (only if message_id is provided)
+                if ($request->message_id) {
+                    $existingMessage = WhatsAppMessage::where('message_id', $request->message_id)->first();
+                    if ($existingMessage) {
+                        Log::info("Duplicate message detected: {$request->message_id}");
+                        return response()->json([
+                            'success' => true,
+                            'message' => '✅ Esta acción ya fue procesada anteriormente.',
+                            'data' => ['already_processed' => true],
+                        ]);
+                    }
                 }
 
                 // Find task assigned to user
@@ -369,14 +495,16 @@ class WhatsAppCommandController extends Controller
                 // Update task status using TaskService
                 $this->taskService->updateTaskStatus($task, 'En Progreso', $user);
 
-                // Save to whatsapp_messages for idempotency
-                WhatsAppMessage::create([
-                    'message_id' => $request->message_id,
-                    'user_id' => $user->id,
-                    'command' => 'start_task',
-                    'task_id' => $task->id,
-                    'processed_at' => now(),
-                ]);
+                // Save to whatsapp_messages for idempotency (only if message_id is provided)
+                if ($request->message_id) {
+                    WhatsAppMessage::create([
+                        'message_id' => $request->message_id,
+                        'user_id' => $user->id,
+                        'command' => 'start_task',
+                        'task_id' => $task->id,
+                        'processed_at' => now(),
+                    ]);
+                }
 
                 $message = "✅ *Tarea Iniciada*\n\n"
                     . "*ID:* `{$task->id}`\n"
@@ -416,9 +544,8 @@ class WhatsAppCommandController extends Controller
     public function completeTask(Request $request): JsonResponse
     {
         $validator = Validator::make($request->all(), [
-            'whatsapp_phone' => 'required|string',
             'task_id' => 'required|string',
-            'message_id' => 'required|string',
+            'message_id' => 'nullable|string',
         ]);
 
         if ($validator->fails()) {
@@ -430,29 +557,29 @@ class WhatsAppCommandController extends Controller
         }
 
         try {
-            return DB::transaction(function () use ($request) {
-                // Check for idempotency
-                $existingMessage = WhatsAppMessage::where('message_id', $request->message_id)->first();
-                if ($existingMessage) {
-                    Log::info("Duplicate message detected: {$request->message_id}");
-                    return response()->json([
-                        'success' => true,
-                        'message' => '✅ Esta acción ya fue procesada anteriormente.',
-                        'data' => ['already_processed' => true],
-                    ]);
-                }
+            // Resolve user from token or whatsapp_phone
+            $user = $this->resolveUser($request);
 
-                // Find user by WhatsApp phone
-                $user = User::where('whatsapp_phone', $request->whatsapp_phone)
-                    ->where('whatsapp_verified', true)
-                    ->first();
+            if (!$user) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Usuario no encontrado. Proporcione token o whatsapp_phone válido.',
+                    'data' => null,
+                ], 404);
+            }
 
-                if (!$user) {
-                    return response()->json([
-                        'success' => false,
-                        'message' => 'Usuario no encontrado o WhatsApp no verificado.',
-                        'data' => null,
-                    ], 404);
+            return DB::transaction(function () use ($request, $user) {
+                // Check for idempotency (only if message_id is provided)
+                if ($request->message_id) {
+                    $existingMessage = WhatsAppMessage::where('message_id', $request->message_id)->first();
+                    if ($existingMessage) {
+                        Log::info("Duplicate message detected: {$request->message_id}");
+                        return response()->json([
+                            'success' => true,
+                            'message' => '✅ Esta acción ya fue procesada anteriormente.',
+                            'data' => ['already_processed' => true],
+                        ]);
+                    }
                 }
 
                 // Find task assigned to user
@@ -480,14 +607,16 @@ class WhatsAppCommandController extends Controller
                 // Update task status using TaskService
                 $this->taskService->updateTaskStatus($task, 'Completada', $user);
 
-                // Save to whatsapp_messages for idempotency
-                WhatsAppMessage::create([
-                    'message_id' => $request->message_id,
-                    'user_id' => $user->id,
-                    'command' => 'complete_task',
-                    'task_id' => $task->id,
-                    'processed_at' => now(),
-                ]);
+                // Save to whatsapp_messages for idempotency (only if message_id is provided)
+                if ($request->message_id) {
+                    WhatsAppMessage::create([
+                        'message_id' => $request->message_id,
+                        'user_id' => $user->id,
+                        'command' => 'complete_task',
+                        'task_id' => $task->id,
+                        'processed_at' => now(),
+                    ]);
+                }
 
                 $message = "🎉 *¡Tarea Completada!*\n\n"
                     . "*ID:* `{$task->id}`\n"
@@ -527,7 +656,6 @@ class WhatsAppCommandController extends Controller
     public function createTask(Request $request): JsonResponse
     {
         $validator = Validator::make($request->all(), [
-            'whatsapp_phone' => 'required|string',
             'title' => 'required|string|max:255',
             'due_date' => 'required|date|date_format:Y-m-d',
             'due_time' => 'required|date_format:H:i',
@@ -545,15 +673,13 @@ class WhatsAppCommandController extends Controller
         }
 
         try {
-            // Find creator by WhatsApp phone
-            $creator = User::where('whatsapp_phone', $request->whatsapp_phone)
-                ->where('whatsapp_verified', true)
-                ->first();
+            // Resolve user from token or whatsapp_phone
+            $creator = $this->resolveUser($request);
 
             if (!$creator) {
                 return response()->json([
                     'success' => false,
-                    'message' => 'Usuario no encontrado o WhatsApp no verificado.',
+                    'message' => 'Usuario no encontrado. Proporcione token o whatsapp_phone válido.',
                     'data' => null,
                 ], 404);
             }
