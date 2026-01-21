@@ -50,6 +50,7 @@ Route::prefix('v1')->middleware('auth:sanctum')->group(function () {
     // Notifications routes
     Route::prefix('notifications')->controller(NotificationController::class)->group(function () {
         Route::get('/', 'index')->name('api.notifications.index');
+        Route::get('unread-count', 'unreadCount')->name('api.notifications.unread-count');
         Route::post('mark-all-read', 'markAllAsRead')->name('api.notifications.mark-all-read');
         Route::patch('{id}/read', 'markAsRead')->name('api.notifications.mark-as-read');
     });
@@ -91,4 +92,10 @@ Route::prefix('v1/whatsapp/commands')->middleware('n8n.auth')->controller(WhatsA
     Route::post('start-task', 'startTask')->name('api.whatsapp.commands.start-task');
     Route::post('complete-task', 'completeTask')->name('api.whatsapp.commands.complete-task');
     Route::post('create-task', 'createTask')->name('api.whatsapp.commands.create-task');
+});
+
+// N8n Notification Routes - Para enviar notificaciones de WhatsApp
+Route::prefix('v1/notifications')->middleware('n8n.auth')->controller(NotificationController::class)->group(function () {
+    Route::get('pending-whatsapp', 'getPendingWhatsApp')->name('api.notifications.pending-whatsapp');
+    Route::patch('{id}/status', 'updateStatus')->name('api.notifications.update-status');
 });

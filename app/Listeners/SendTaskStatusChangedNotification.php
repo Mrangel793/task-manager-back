@@ -4,6 +4,8 @@ namespace App\Listeners;
 
 use App\Events\TaskStatusChanged;
 use App\Models\Notification;
+use App\Models\User;
+use App\Notifications\TaskStatusChangedEmailNotification;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Support\Facades\Log;
@@ -13,17 +15,12 @@ class SendTaskStatusChangedNotification implements ShouldQueue
     use InteractsWithQueue;
 
     /**
-     * Create the event listener.
-     */
-    public function __construct()
-    {
-        //
-    }
-
-    /**
      * Handle the event.
      *
-     * Notify supervisor and creator about status change.
+     * Notify Admin users when a task status changes:
+     * - In-app notification
+     * - Email notification
+     * - WhatsApp notification (if enabled)
      *
      * @param TaskStatusChanged $event
      * @return void
@@ -32,110 +29,174 @@ class SendTaskStatusChangedNotification implements ShouldQueue
     {
         try {
             $task = $event->task;
-            $creator = $task->creator;
-            $assignee = $task->assignee;
+            $changedBy = $event->user;
 
-            // Notify creator if they're not the one who changed the status
-            if ($creator->id !== $event->user->id) {
-                $this->sendNotificationToUser($creator, $event);
-            }
+            Log::info("Processing status change notification for task {$task->id}: {$event->oldStatus} -> {$event->newStatus}");
 
-            // Notify assignee if they're not the one who changed the status
-            if ($assignee->id !== $event->user->id) {
-                $this->sendNotificationToUser($assignee, $event);
-            }
-
-            // Notify supervisors (users with Supervisor role)
-            // Only if a supervisor is not the creator or assignee and didn't make the change
-            $supervisors = \App\Models\User::role('Supervisor')
+            // Get all Admin users (except the one who made the change)
+            $admins = User::role('Admin')
                 ->where('is_active', true)
-                ->whereNotIn('id', [
-                    $creator->id,
-                    $assignee->id,
-                    $event->user->id,
-                ])
+                ->where('id', '!=', $changedBy->id)
                 ->get();
 
-            foreach ($supervisors as $supervisor) {
-                $this->sendNotificationToUser($supervisor, $event);
+            foreach ($admins as $admin) {
+                $this->sendNotificationsToUser($admin, $event);
             }
+
+            // Also notify the task creator if they're not Admin and not the one who changed
+            $creator = $task->creator;
+            if ($creator->id !== $changedBy->id && !$creator->hasRole('Admin')) {
+                $this->sendNotificationsToUser($creator, $event);
+            }
+
+            // Notify assignee if they didn't make the change
+            $assignee = $task->assignee;
+            if ($assignee && $assignee->id !== $changedBy->id && $assignee->id !== $creator->id) {
+                $this->sendNotificationsToUser($assignee, $event);
+            }
+
+            Log::info("Status change notifications processed for task {$task->id}");
         } catch (\Exception $e) {
-            Log::error('Error creating status change notifications: ' . $e->getMessage());
+            Log::error('Error creating status change notifications: ' . $e->getMessage(), [
+                'task_id' => $event->task->id ?? null,
+                'trace' => $e->getTraceAsString(),
+            ]);
         }
     }
 
     /**
-     * Send notification to a specific user.
-     *
-     * @param \App\Models\User $user
-     * @param TaskStatusChanged $event
-     * @return void
+     * Send all notification types to a user.
      */
-    private function sendNotificationToUser(\App\Models\User $user, TaskStatusChanged $event): void
+    private function sendNotificationsToUser(User $user, TaskStatusChanged $event): void
     {
         $task = $event->task;
-        $preferences = $user->notification_preferences;
+        $preferences = $user->notification_preferences ?? [];
 
-        // Create Web Push notification if enabled
-        if ($preferences['web_push'] ?? true) {
-            Notification::create([
-                'user_id' => $user->id,
-                'type' => 'task_status_changed',
-                'channel' => 'web_push',
-                'title' => 'Cambio de estado de tarea',
-                'message' => "La tarea '{$task->title}' cambió de '{$event->oldStatus}' a '{$event->newStatus}'",
-                'data' => [
-                    'task_id' => $task->id,
-                    'task_title' => $task->title,
-                    'old_status' => $event->oldStatus,
-                    'new_status' => $event->newStatus,
-                    'changed_by' => [
-                        'id' => $event->user->id,
-                        'name' => $event->user->name,
-                    ],
-                ],
-                'status' => 'pending',
-            ]);
+        // 1. Create IN-APP notification (always)
+        $this->createInAppNotification($user, $event);
 
-            Log::info("Web Push status change notification created for task {$task->id} to user {$user->id}");
+        // 2. Send EMAIL notification (if email exists)
+        if ($user->email) {
+            $this->sendEmailNotification($user, $event);
         }
 
-        // Create WhatsApp notification if enabled and user has WhatsApp verified
+        // 3. Create WHATSAPP notification (if enabled and verified)
         if (($preferences['whatsapp'] ?? true) && $user->whatsapp_verified) {
+            $this->createWhatsAppNotification($user, $event);
+        }
+    }
+
+    /**
+     * Create in-app notification.
+     */
+    private function createInAppNotification(User $user, TaskStatusChanged $event): void
+    {
+        $task = $event->task;
+
+        Notification::create([
+            'user_id' => $user->id,
+            'task_id' => $task->id,
+            'type' => 'task_status_changed',
+            'channel' => 'in_app',
+            'title' => 'Cambio de estado de tarea',
+            'message' => "La tarea '{$task->title}' cambio de '{$event->oldStatus}' a '{$event->newStatus}'",
+            'data' => [
+                'task_id' => $task->id,
+                'task_title' => $task->title,
+                'old_status' => $event->oldStatus,
+                'new_status' => $event->newStatus,
+                'changed_by_id' => $event->user->id,
+                'changed_by_name' => $event->user->name,
+                'assignee_name' => $task->assignee->name ?? null,
+            ],
+            'status' => 'sent',
+            'sent_at' => now(),
+        ]);
+
+        Log::info("In-app status change notification created for task {$task->id} to user {$user->id}");
+    }
+
+    /**
+     * Send email notification.
+     */
+    private function sendEmailNotification(User $user, TaskStatusChanged $event): void
+    {
+        try {
+            $task = $event->task;
+
+            $user->notify(new TaskStatusChangedEmailNotification(
+                $task,
+                $event->oldStatus,
+                $event->newStatus,
+                $event->user
+            ));
+
+            // Record email notification
             Notification::create([
                 'user_id' => $user->id,
+                'task_id' => $task->id,
                 'type' => 'task_status_changed',
-                'channel' => 'whatsapp',
+                'channel' => 'email',
                 'title' => 'Cambio de estado de tarea',
-                'message' => "🔄 *Cambio de estado*\n\n"
-                    . "*Tarea:* {$task->title}\n"
-                    . "*Estado anterior:* {$event->oldStatus}\n"
-                    . "*Estado nuevo:* {$event->newStatus}\n"
-                    . "*Cambiado por:* {$event->user->name}",
+                'message' => "La tarea '{$task->title}' cambio de '{$event->oldStatus}' a '{$event->newStatus}'",
                 'data' => [
                     'task_id' => $task->id,
-                    'phone' => $user->whatsapp_phone ?? $user->phone,
+                    'email' => $user->email,
                 ],
-                'status' => 'pending',
+                'status' => 'sent',
+                'sent_at' => now(),
             ]);
 
-            Log::info("WhatsApp status change notification created for task {$task->id} to user {$user->id}");
+            Log::info("Email status change notification sent for task {$task->id} to {$user->email}");
+        } catch (\Exception $e) {
+            Log::error("Failed to send status change email notification: " . $e->getMessage());
         }
+    }
 
-        // TODO: Dispatch notification jobs to queue
-        // dispatch(new SendWebPushNotificationJob($notification));
-        // dispatch(new SendWhatsAppNotificationJob($notification));
+    /**
+     * Create WhatsApp notification (to be processed by n8n).
+     */
+    private function createWhatsAppNotification(User $user, TaskStatusChanged $event): void
+    {
+        $task = $event->task;
+
+        $statusEmoji = match ($event->newStatus) {
+            'Pendiente' => '⏸️',
+            'En Progreso' => '▶️',
+            'Completada' => '✅',
+            'Cancelada' => '❌',
+            default => '🔄',
+        };
+
+        Notification::create([
+            'user_id' => $user->id,
+            'task_id' => $task->id,
+            'type' => 'task_status_changed',
+            'channel' => 'whatsapp',
+            'title' => 'Cambio de estado de tarea',
+            'message' => "{$statusEmoji} *Cambio de estado*\n\n"
+                . "*Tarea:* {$task->title}\n"
+                . "*Estado anterior:* {$event->oldStatus}\n"
+                . "*Estado nuevo:* {$event->newStatus}\n"
+                . "*Cambiado por:* {$event->user->name}\n"
+                . "*Asignado a:* " . ($task->assignee->name ?? 'Sin asignar'),
+            'data' => [
+                'task_id' => $task->id,
+                'phone' => $user->whatsapp_phone ?? $user->phone,
+            ],
+            'status' => 'pending',
+        ]);
+
+        Log::info("WhatsApp status change notification created for task {$task->id} to user {$user->id}");
     }
 
     /**
      * Handle a job failure.
-     *
-     * @param TaskStatusChanged $event
-     * @param \Throwable $exception
-     * @return void
      */
     public function failed(TaskStatusChanged $event, \Throwable $exception): void
     {
-        Log::error('SendTaskStatusChangedNotification listener failed: ' . $exception->getMessage());
+        Log::error('SendTaskStatusChangedNotification listener failed: ' . $exception->getMessage(), [
+            'task_id' => $event->task->id ?? null,
+        ]);
     }
 }

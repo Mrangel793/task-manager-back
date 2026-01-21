@@ -39,6 +39,9 @@ class Notification extends Model
         'task_id',
         'channel',
         'type',
+        'title',
+        'message',
+        'data',
         'status',
         'sent_at',
         'read_at',
@@ -54,6 +57,7 @@ class Notification extends Model
     protected function casts(): array
     {
         return [
+            'data' => 'array',
             'sent_at' => 'datetime',
             'read_at' => 'datetime',
             'retry_count' => 'integer',

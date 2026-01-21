@@ -10,7 +10,7 @@ use Illuminate\Http\Request;
 class NotificationController extends Controller
 {
     /**
-     * Display a listing of the user's notifications.
+     * Display a listing of the user's in-app notifications.
      *
      * @param Request $request
      * @return JsonResponse
@@ -19,34 +19,56 @@ class NotificationController extends Controller
     {
         $user = $request->user();
 
-        $notifications = Notification::where('user_id', $user->id)
-            ->with(['task:id,title,status', 'task.assignee:id,name'])
-            ->orderBy('created_at', 'desc')
-            ->get()
-            ->map(function ($notification) {
-                return [
-                    'id' => $notification->id,
-                    'type' => $notification->type,
-                    'task' => [
-                        'id' => $notification->task->id ?? null,
-                        'title' => $notification->task->title ?? null,
-                        'status' => $notification->task->status ?? null,
-                        'assignee_name' => $notification->task->assignee->name ?? null,
-                    ],
-                    'message' => $this->getNotificationMessage($notification),
-                    'is_read' => !is_null($notification->read_at),
-                    'created_at' => $notification->created_at->toISOString(),
-                    'read_at' => $notification->read_at?->toISOString(),
-                ];
-            });
+        $query = Notification::where('user_id', $user->id)
+            ->where('channel', 'in_app')
+            ->with(['task:id,title,status,priority', 'task.assignee:id,name'])
+            ->orderBy('created_at', 'desc');
 
-        $unreadCount = $notifications->where('is_read', false)->count();
+        // Optional: filter by read status
+        if ($request->has('unread_only') && $request->boolean('unread_only')) {
+            $query->whereNull('read_at');
+        }
+
+        // Pagination
+        $perPage = $request->get('per_page', 20);
+        $notifications = $query->paginate($perPage);
+
+        $formattedNotifications = $notifications->getCollection()->map(function ($notification) {
+            return [
+                'id' => $notification->id,
+                'type' => $notification->type,
+                'title' => $notification->title,
+                'message' => $notification->message ?? $this->getNotificationMessage($notification),
+                'data' => $notification->data,
+                'task' => $notification->task ? [
+                    'id' => $notification->task->id,
+                    'title' => $notification->task->title,
+                    'status' => $notification->task->status,
+                    'priority' => $notification->task->priority,
+                    'assignee_name' => $notification->task->assignee->name ?? null,
+                ] : null,
+                'is_read' => !is_null($notification->read_at),
+                'created_at' => $notification->created_at->toISOString(),
+                'read_at' => $notification->read_at?->toISOString(),
+            ];
+        });
+
+        $unreadCount = Notification::where('user_id', $user->id)
+            ->where('channel', 'in_app')
+            ->whereNull('read_at')
+            ->count();
 
         return response()->json([
             'success' => true,
             'data' => [
-                'notifications' => $notifications,
+                'notifications' => $formattedNotifications,
                 'unread_count' => $unreadCount,
+                'pagination' => [
+                    'current_page' => $notifications->currentPage(),
+                    'last_page' => $notifications->lastPage(),
+                    'per_page' => $notifications->perPage(),
+                    'total' => $notifications->total(),
+                ],
             ],
         ]);
     }
@@ -69,7 +91,7 @@ class NotificationController extends Controller
         if (!$notification) {
             return response()->json([
                 'success' => false,
-                'message' => 'Notification not found',
+                'message' => 'Notificacion no encontrada',
             ], 404);
         }
 
@@ -79,7 +101,7 @@ class NotificationController extends Controller
 
         return response()->json([
             'success' => true,
-            'message' => 'Notification marked as read',
+            'message' => 'Notificacion marcada como leida',
             'data' => [
                 'id' => $notification->id,
                 'read_at' => $notification->read_at->toISOString(),
@@ -98,12 +120,13 @@ class NotificationController extends Controller
         $user = $request->user();
 
         $updated = Notification::where('user_id', $user->id)
+            ->where('channel', 'in_app')
             ->whereNull('read_at')
             ->update(['read_at' => now()]);
 
         return response()->json([
             'success' => true,
-            'message' => 'All notifications marked as read',
+            'message' => 'Todas las notificaciones marcadas como leidas',
             'data' => [
                 'updated_count' => $updated,
             ],
@@ -111,23 +134,137 @@ class NotificationController extends Controller
     }
 
     /**
-     * Get a human-readable message for the notification.
+     * Get unread count only.
+     *
+     * @param Request $request
+     * @return JsonResponse
+     */
+    public function unreadCount(Request $request): JsonResponse
+    {
+        $user = $request->user();
+
+        $count = Notification::where('user_id', $user->id)
+            ->where('channel', 'in_app')
+            ->whereNull('read_at')
+            ->count();
+
+        return response()->json([
+            'success' => true,
+            'data' => [
+                'unread_count' => $count,
+            ],
+        ]);
+    }
+
+    /**
+     * Get pending WhatsApp notifications (for n8n integration).
+     * This endpoint is called by n8n to fetch notifications to send.
+     *
+     * @param Request $request
+     * @return JsonResponse
+     */
+    public function getPendingWhatsApp(Request $request): JsonResponse
+    {
+        $limit = $request->get('limit', 10);
+
+        $notifications = Notification::where('channel', 'whatsapp')
+            ->where('status', 'pending')
+            ->where('retry_count', '<', 3) // Max 3 retries
+            ->with(['user:id,name,phone,whatsapp_phone', 'task:id,title'])
+            ->orderBy('created_at', 'asc')
+            ->limit($limit)
+            ->get()
+            ->map(function ($notification) {
+                return [
+                    'id' => $notification->id,
+                    'user_id' => $notification->user_id,
+                    'task_id' => $notification->task_id,
+                    'type' => $notification->type,
+                    'title' => $notification->title,
+                    'message' => $notification->message,
+                    'data' => $notification->data,
+                    'retry_count' => $notification->retry_count,
+                    'created_at' => $notification->created_at->toISOString(),
+                ];
+            });
+
+        return response()->json([
+            'success' => true,
+            'data' => [
+                'notifications' => $notifications,
+                'count' => $notifications->count(),
+            ],
+        ]);
+    }
+
+    /**
+     * Update notification status (for n8n integration).
+     *
+     * @param Request $request
+     * @param string $id
+     * @return JsonResponse
+     */
+    public function updateStatus(Request $request, string $id): JsonResponse
+    {
+        $notification = Notification::find($id);
+
+        if (!$notification) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Notificacion no encontrada',
+            ], 404);
+        }
+
+        $status = $request->input('status');
+        $validStatuses = ['pending', 'sent', 'failed', 'deferred'];
+
+        if (!in_array($status, $validStatuses)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Estado invalido. Valores permitidos: ' . implode(', ', $validStatuses),
+            ], 400);
+        }
+
+        $updateData = ['status' => $status];
+
+        if ($status === 'sent') {
+            $updateData['sent_at'] = $request->input('sent_at', now());
+        } elseif ($status === 'failed') {
+            $updateData['failure_reason'] = $request->input('failure_reason', 'Unknown error');
+            $updateData['retry_count'] = $notification->retry_count + 1;
+        }
+
+        $notification->update($updateData);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Estado de notificacion actualizado',
+            'data' => [
+                'id' => $notification->id,
+                'status' => $notification->status,
+                'sent_at' => $notification->sent_at?->toISOString(),
+            ],
+        ]);
+    }
+
+    /**
+     * Get a human-readable message for the notification (fallback).
      *
      * @param Notification $notification
      * @return string
      */
     private function getNotificationMessage(Notification $notification): string
     {
-        $taskTitle = $notification->task->title ?? 'Unknown task';
+        $taskTitle = $notification->task->title ?? 'Tarea desconocida';
 
         return match ($notification->type) {
-            'task_assigned' => "You have been assigned to task: {$taskTitle}",
-            'task_reminder' => "Reminder: {$taskTitle}",
-            'task_due_soon' => "Task due soon: {$taskTitle}",
-            'task_overdue' => "Task is overdue: {$taskTitle}",
-            'status_changed' => "Task status changed: {$taskTitle}",
-            'task_reassigned' => "Task has been reassigned: {$taskTitle}",
-            default => "Notification about: {$taskTitle}",
+            'task_assigned', 'task_created' => "Se te ha asignado la tarea: {$taskTitle}",
+            'task_reminder' => "Recordatorio: {$taskTitle}",
+            'task_due_soon' => "Tarea por vencer: {$taskTitle}",
+            'task_overdue' => "Tarea vencida: {$taskTitle}",
+            'status_changed', 'task_status_changed' => "Cambio de estado en tarea: {$taskTitle}",
+            'task_reassigned' => "Tarea reasignada: {$taskTitle}",
+            default => "Notificacion sobre: {$taskTitle}",
         };
     }
 }
