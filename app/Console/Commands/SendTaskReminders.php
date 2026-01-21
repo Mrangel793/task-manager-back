@@ -53,8 +53,8 @@ class SendTaskReminders extends Command
                         return false;
                     }
 
-                    // Parse due_time (format: HH:MM)
-                    $dueDateTime = Carbon::parse($task->due_date->format('Y-m-d') . ' ' . $task->due_time);
+                    // Parse due_time (format: HH:MM) - due_date is already Y-m-d string
+                    $dueDateTime = Carbon::parse($task->due_date . ' ' . $task->due_time);
 
                     // Check if due time is within our window
                     return $dueDateTime->between($startWindow, $endWindow);

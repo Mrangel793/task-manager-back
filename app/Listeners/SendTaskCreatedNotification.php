@@ -54,7 +54,7 @@ class SendTaskCreatedNotification implements ShouldQueue
                     'message' => "📋 *Nueva tarea asignada*\n\n"
                         . "*Título:* {$task->title}\n"
                         . "*Prioridad:* {$task->priority}\n"
-                        . "*Vence:* {$task->due_date?->format('d/m/Y')} a las {$task->due_time}\n"
+                        . "*Vence:* {$task->formatted_due_date} a las {$task->due_time}\n"
                         . "*Asignado por:* {$event->creator->name}",
                     'data' => [
                         'task_id' => $task->id,

@@ -74,11 +74,57 @@ class Task extends Model
     protected function casts(): array
     {
         return [
-            'due_date' => 'date',
-            'due_time' => 'datetime:H:i',
             'started_at' => 'datetime',
             'completed_at' => 'datetime',
         ];
+    }
+
+    /**
+     * Get the due_date attribute without timezone conversion.
+     */
+    public function getDueDateAttribute($value): ?string
+    {
+        return $value ?? ($this->attributes['due_date'] ?? null);
+    }
+
+    /**
+     * Get due_date as Carbon instance for formatting (without timezone issues).
+     */
+    public function getDueDateCarbonAttribute(): ?\Carbon\Carbon
+    {
+        $dueDate = $this->attributes['due_date'] ?? null;
+        if (!$dueDate) {
+            return null;
+        }
+        // Create Carbon in app timezone to avoid conversion
+        return \Carbon\Carbon::createFromFormat('Y-m-d', $dueDate, config('app.timezone'))
+            ->startOfDay();
+    }
+
+    /**
+     * Get formatted due date.
+     */
+    public function getFormattedDueDateAttribute(): ?string
+    {
+        return $this->due_date_carbon?->format('d/m/Y');
+    }
+
+    /**
+     * Set the due_date attribute without timezone conversion.
+     */
+    public function setDueDateAttribute($value): void
+    {
+        // Store as-is if already a string in Y-m-d format
+        if (is_string($value) && preg_match('/^\d{4}-\d{2}-\d{2}$/', $value)) {
+            $this->attributes['due_date'] = $value;
+        } elseif ($value instanceof \DateTimeInterface) {
+            $this->attributes['due_date'] = $value->format('Y-m-d');
+        } elseif ($value) {
+            // Parse and store just the date part
+            $this->attributes['due_date'] = date('Y-m-d', strtotime($value));
+        } else {
+            $this->attributes['due_date'] = null;
+        }
     }
 
     /**

@@ -57,7 +57,7 @@ class TaskAssignedNotification extends Notification implements ShouldQueue
     public function toWebPush(object $notifiable): WebPushMessage
     {
         $dueDate = $this->task->due_date
-            ? $this->task->due_date->format('d/m/Y H:i')
+            ? $this->task->due_date_carbon->format('d/m/Y') . ($this->task->due_time ? ' ' . $this->task->due_time : '')
             : 'Sin fecha límite';
 
         return (new WebPushMessage)

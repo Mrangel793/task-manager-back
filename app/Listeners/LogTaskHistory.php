@@ -64,7 +64,7 @@ class LogTaskHistory implements ShouldQueue
             'assignee_name' => $event->task->assignee->name,
             'creator_id' => $event->creator->id,
             'creator_name' => $event->creator->name,
-            'due_date' => $event->task->due_date?->toDateString(),
+            'due_date' => $event->task->due_date,
             'due_time' => $event->task->due_time,
             'timestamp' => now()->toIso8601String(),
         ]);

@@ -36,7 +36,7 @@ class UserResource extends JsonResource
                         'title' => $task->title,
                         'status' => $task->status,
                         'priority' => $task->priority,
-                        'due_date' => $task->due_date?->toISOString(),
+                        'due_date' => $task->due_date,
                     ];
                 });
             }),
@@ -48,7 +48,7 @@ class UserResource extends JsonResource
                         'title' => $task->title,
                         'status' => $task->status,
                         'priority' => $task->priority,
-                        'due_date' => $task->due_date?->toISOString(),
+                        'due_date' => $task->due_date,
                     ];
                 });
             }),

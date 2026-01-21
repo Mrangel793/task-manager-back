@@ -168,7 +168,7 @@ class WhatsAppCommandController extends Controller
                 $statusEmoji = $task->status === 'En Progreso' ? '▶️' : '⏸️';
 
                 $dueInfo = $task->due_date
-                    ? $task->due_date->format('d/m/Y') . ($task->due_time ? ' ' . $task->due_time : '')
+                    ? $task->due_date_carbon->format('d/m/Y') . ($task->due_time ? ' ' . $task->due_time : '')
                     : 'Sin fecha';
 
                 $assigneeInfo = $showAssignee && $task->assignee
@@ -198,7 +198,7 @@ class WhatsAppCommandController extends Controller
                         'title' => $task->title,
                         'status' => $task->status,
                         'priority' => $task->priority,
-                        'due_date' => $task->due_date?->format('Y-m-d'),
+                        'due_date' => $task->due_date,
                         'due_time' => $task->due_time,
                         'assignee' => $task->assignee ? [
                             'id' => $task->assignee->id,
@@ -367,7 +367,7 @@ class WhatsAppCommandController extends Controller
             };
 
             $dueInfo = $task->due_date
-                ? $task->due_date->format('d/m/Y') . ($task->due_time ? ' a las ' . $task->due_time : '')
+                ? $task->due_date_carbon->format('d/m/Y') . ($task->due_time ? ' a las ' . $task->due_time : '')
                 : 'Sin fecha límite';
 
             $message = "📋 *Detalle de Tarea*\n\n"
@@ -399,7 +399,7 @@ class WhatsAppCommandController extends Controller
                         'description' => $task->description,
                         'status' => $task->status,
                         'priority' => $task->priority,
-                        'due_date' => $task->due_date?->format('Y-m-d'),
+                        'due_date' => $task->due_date,
                         'due_time' => $task->due_time,
                         'assignee' => [
                             'id' => $task->assignee->id,
@@ -745,7 +745,7 @@ class WhatsAppCommandController extends Controller
                 . "*Título:* {$task->title}\n"
                 . "*Prioridad:* {$priorityEmoji} {$task->priority}\n"
                 . "*Asignado a:* {$assignee->name}\n"
-                . "*Vencimiento:* 📅 {$task->due_date->format('d/m/Y')} a las {$task->due_time}\n\n"
+                . "*Vencimiento:* 📅 {$task->due_date_carbon->format('d/m/Y')} a las {$task->due_time}\n\n"
                 . "_El usuario asignado recibirá una notificación._";
 
             return response()->json([
@@ -758,7 +758,7 @@ class WhatsAppCommandController extends Controller
                         'description' => $task->description,
                         'status' => $task->status,
                         'priority' => $task->priority,
-                        'due_date' => $task->due_date->format('Y-m-d'),
+                        'due_date' => $task->due_date_carbon->format('Y-m-d'),
                         'due_time' => $task->due_time,
                         'assignee' => [
                             'id' => $assignee->id,
