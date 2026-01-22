@@ -53,8 +53,9 @@ class SendTaskCreatedNotification implements ShouldQueue
                 Log::info("Web Push notification sent for task {$task->id} to user {$assignee->id}");
             }
 
-            // 4. Create WHATSAPP notification (if enabled and verified)
-            if (($preferences['whatsapp'] ?? true) && $assignee->whatsapp_verified) {
+            // 4. Create WHATSAPP notification (if has phone number)
+            $phone = $assignee->whatsapp_phone ?? $assignee->phone;
+            if (($preferences['whatsapp'] ?? true) && $phone) {
                 $this->createWhatsAppNotification($assignee, $task, $creator);
             }
 

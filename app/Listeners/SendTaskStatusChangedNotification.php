@@ -80,8 +80,9 @@ class SendTaskStatusChangedNotification implements ShouldQueue
             $this->sendEmailNotification($user, $event);
         }
 
-        // 3. Create WHATSAPP notification (if enabled and verified)
-        if (($preferences['whatsapp'] ?? true) && $user->whatsapp_verified) {
+        // 3. Create WHATSAPP notification (if has phone number)
+        $phone = $user->whatsapp_phone ?? $user->phone;
+        if (($preferences['whatsapp'] ?? true) && $phone) {
             $this->createWhatsAppNotification($user, $event);
         }
     }
