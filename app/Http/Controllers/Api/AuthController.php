@@ -322,4 +322,66 @@ class AuthController extends Controller
             ], 500);
         }
     }
+
+    /**
+     * Change user password.
+     *
+     * @param Request $request
+     * @return JsonResponse
+     */
+    public function changePassword(Request $request): JsonResponse
+    {
+        $request->validate([
+            'current_password' => 'required|string',
+            'new_password' => 'required|string|min:8|confirmed',
+        ], [
+            'current_password.required' => 'La contraseña actual es obligatoria.',
+            'new_password.required' => 'La nueva contraseña es obligatoria.',
+            'new_password.min' => 'La nueva contraseña debe tener al menos 8 caracteres.',
+            'new_password.confirmed' => 'La confirmación de la nueva contraseña no coincide.',
+        ]);
+
+        try {
+            $user = $request->user();
+
+            // Verify current password
+            if (!Hash::check($request->current_password, $user->password)) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'La contraseña actual es incorrecta.',
+                    'errors' => ['current_password' => ['La contraseña actual no es correcta.']],
+                ], 422);
+            }
+
+            // Check if new password is different from current
+            if (Hash::check($request->new_password, $user->password)) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'La nueva contraseña debe ser diferente a la actual.',
+                    'errors' => ['new_password' => ['La nueva contraseña no puede ser igual a la actual.']],
+                ], 422);
+            }
+
+            // Update password
+            $user->update([
+                'password' => $request->new_password,
+            ]);
+
+            // Revoke all tokens except current one (optional security measure)
+            // $user->tokens()->where('id', '!=', $request->user()->currentAccessToken()->id)->delete();
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Contraseña actualizada exitosamente.',
+            ], 200);
+        } catch (\Exception $e) {
+            Log::error('Error al cambiar contraseña: ' . $e->getMessage());
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Error al cambiar la contraseña.',
+                'errors' => ['server' => ['Ocurrió un error inesperado. Por favor, inténtelo de nuevo.']],
+            ], 500);
+        }
+    }
 }
