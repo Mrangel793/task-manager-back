@@ -35,6 +35,7 @@ Route::prefix('v1')->middleware('auth:sanctum')->group(function () {
         Route::post('refresh-token', 'refreshToken')->name('api.auth.refresh-token');
         Route::post('change-password', 'changePassword')->name('api.auth.change-password');
         Route::get('me', 'me')->name('api.auth.me');
+        Route::patch('me', 'updateProfile')->name('api.auth.update-profile');
     });
 
     // Users CRUD routes

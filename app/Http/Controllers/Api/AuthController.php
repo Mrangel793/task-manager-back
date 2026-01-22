@@ -324,6 +324,69 @@ class AuthController extends Controller
     }
 
     /**
+     * Update authenticated user profile.
+     *
+     * @param Request $request
+     * @return JsonResponse
+     */
+    public function updateProfile(Request $request): JsonResponse
+    {
+        $user = $request->user();
+
+        $request->validate([
+            'name' => 'sometimes|string|max:255',
+            'email' => 'sometimes|email|unique:users,email,' . $user->id,
+            'phone' => 'sometimes|nullable|string|max:20',
+            'whatsapp_phone' => 'sometimes|nullable|string|max:20',
+            'notification_preferences' => 'sometimes|array',
+        ], [
+            'name.max' => 'El nombre no puede tener más de 255 caracteres.',
+            'email.email' => 'El correo electrónico debe ser válido.',
+            'email.unique' => 'Este correo electrónico ya está en uso.',
+            'phone.max' => 'El teléfono no puede tener más de 20 caracteres.',
+            'whatsapp_phone.max' => 'El teléfono de WhatsApp no puede tener más de 20 caracteres.',
+        ]);
+
+        try {
+            $user->update($request->only([
+                'name',
+                'email',
+                'phone',
+                'whatsapp_phone',
+                'notification_preferences',
+            ]));
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Perfil actualizado exitosamente.',
+                'data' => [
+                    'user' => [
+                        'id' => $user->id,
+                        'email' => $user->email,
+                        'phone' => $user->phone,
+                        'name' => $user->name,
+                        'role' => $user->role,
+                        'is_active' => $user->is_active,
+                        'whatsapp_verified' => $user->whatsapp_verified,
+                        'whatsapp_phone' => $user->whatsapp_phone,
+                        'notification_preferences' => $user->notification_preferences,
+                        'permissions' => $user->getAllPermissions()->pluck('name'),
+                        'roles' => $user->getRoleNames(),
+                    ],
+                ],
+            ], 200);
+        } catch (\Exception $e) {
+            Log::error('Error al actualizar perfil: ' . $e->getMessage());
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Error al actualizar el perfil.',
+                'errors' => ['server' => ['Ocurrió un error inesperado. Por favor, inténtelo de nuevo.']],
+            ], 500);
+        }
+    }
+
+    /**
      * Change user password.
      *
      * @param Request $request
