@@ -7,6 +7,7 @@ use App\Http\Requests\StoreUserRequest;
 use App\Http\Requests\UpdateUserRequest;
 use App\Http\Resources\UserResource;
 use App\Models\User;
+use App\Notifications\WelcomeUserNotification;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
@@ -94,12 +95,15 @@ class UserController extends Controller
     public function store(StoreUserRequest $request): JsonResponse
     {
         try {
+            // Store plain password before hashing (for email notification)
+            $plainPassword = $request->password;
+
             // Create user
             $user = User::create([
                 'email' => $request->email,
                 'phone' => $request->phone,
                 'name' => $request->name,
-                'password' => $request->password,
+                'password' => $plainPassword,
                 'role' => $request->role,
                 'is_active' => $request->get('is_active', true),
                 'whatsapp_phone' => $request->whatsapp_phone,
@@ -111,9 +115,14 @@ class UserController extends Controller
             // Assign role
             $user->assignRole($request->role);
 
+            // Send welcome email with credentials
+            if ($user->email) {
+                $user->notify(new WelcomeUserNotification($plainPassword, $request->user()));
+            }
+
             return response()->json([
                 'success' => true,
-                'message' => 'Usuario creado exitosamente.',
+                'message' => 'Usuario creado exitosamente. Se han enviado las credenciales por correo.',
                 'data' => new UserResource($user),
             ], 201);
         } catch (\Exception $e) {
