@@ -182,8 +182,18 @@ class SendTaskStatusChangedNotification implements ShouldQueue
                 . "*Cambiado por:* {$event->user->name}\n"
                 . "*Asignado a:* " . ($task->assignee->name ?? 'Sin asignar'),
             'data' => [
-                'task_id' => $task->id,
                 'phone' => $user->whatsapp_phone ?? $user->phone,
+                'template' => 'tarea_estado_cambio',
+                'template_params' => [
+                    'user_name' => $user->name,
+                    'task_title' => $task->title,
+                    'old_status' => $event->oldStatus,
+                    'new_status' => $event->newStatus,
+                    'changed_by_name' => $event->user->name,
+                ],
+                'button_params' => [
+                    'task_id' => $task->id,
+                ],
             ],
             'status' => 'pending',
         ]);
