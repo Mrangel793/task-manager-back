@@ -132,6 +132,7 @@ class SendTaskCreatedNotification implements ShouldQueue
     private function createWhatsAppNotification(User $user, $task, User $creator): void
     {
         $dueDate = $task->formatted_due_date ?? $task->due_date;
+        $dueTime = $task->due_time ? " a las {$task->due_time}" : "";
 
         Notification::create([
             'user_id' => $user->id,
@@ -139,15 +140,20 @@ class SendTaskCreatedNotification implements ShouldQueue
             'type' => 'task_created',
             'channel' => 'whatsapp',
             'title' => 'Nueva tarea asignada',
-            'message' => "📋 *Nueva tarea asignada*\n\n"
-                . "*Titulo:* {$task->title}\n"
-                . "*Prioridad:* {$task->priority}\n"
-                . "*Vence:* {$dueDate}" . ($task->due_time ? " a las {$task->due_time}" : "") . "\n"
-                . "*Asignado por:* {$creator->name}\n\n"
-                . "_Responde con /tareas para ver todas tus tareas._",
+            'message' => "Nueva tarea asignada: {$task->title}",
             'data' => [
-                'task_id' => $task->id,
                 'phone' => $user->whatsapp_phone ?? $user->phone,
+                'template' => 'tarea_asignada',
+                'template_params' => [
+                    'user_name' => $user->name,
+                    'task_title' => $task->title,
+                    'priority' => $task->priority,
+                    'due_date' => $dueDate . $dueTime,
+                    'creator_name' => $creator->name,
+                ],
+                'button_params' => [
+                    'task_id' => $task->id,
+                ],
             ],
             'status' => 'pending',
         ]);
