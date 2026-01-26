@@ -684,11 +684,11 @@ class WhatsAppCommandController extends Controller
                 ], 404);
             }
 
-            // Check if user is Supervisor or Admin
-            if (!$creator->hasAnyRole(['Supervisor', 'Admin'])) {
+            // Check if user has permission to create tasks
+            if (!$creator->hasPermissionTo('create-tasks')) {
                 return response()->json([
                     'success' => false,
-                    'message' => '❌ No tienes permisos para crear tareas. Solo Supervisores y Administradores pueden hacerlo.',
+                    'message' => '❌ No tienes permisos para crear tareas.',
                     'data' => null,
                 ], 403);
             }
