@@ -470,10 +470,25 @@ class WhatsAppCommandController extends Controller
                     }
                 }
 
-                // Find task assigned to user
-                $task = Task::where('id', $request->task_id)
-                    ->where('assignee_id', $user->id)
-                    ->first();
+                // Find task with RBAC logic
+                $query = Task::where('id', $request->task_id);
+
+                // Apply RBAC: Admin sees all, Supervisor sees team, Operador sees own
+                if ($user->hasRole('Admin')) {
+                    // Admin can access all tasks
+                } elseif ($user->hasRole('Supervisor')) {
+                    // Supervisor can access their tasks + Operadores' tasks
+                    $operadorIds = User::role('Operador')->pluck('id');
+                    $query->where(function ($q) use ($user, $operadorIds) {
+                        $q->where('assignee_id', $user->id)
+                          ->orWhereIn('assignee_id', $operadorIds);
+                    });
+                } else {
+                    // Operador can only access their assigned tasks
+                    $query->where('assignee_id', $user->id);
+                }
+
+                $task = $query->first();
 
                 if (!$task) {
                     return response()->json([
@@ -582,10 +597,25 @@ class WhatsAppCommandController extends Controller
                     }
                 }
 
-                // Find task assigned to user
-                $task = Task::where('id', $request->task_id)
-                    ->where('assignee_id', $user->id)
-                    ->first();
+                // Find task with RBAC logic
+                $query = Task::where('id', $request->task_id);
+
+                // Apply RBAC: Admin sees all, Supervisor sees team, Operador sees own
+                if ($user->hasRole('Admin')) {
+                    // Admin can access all tasks
+                } elseif ($user->hasRole('Supervisor')) {
+                    // Supervisor can access their tasks + Operadores' tasks
+                    $operadorIds = User::role('Operador')->pluck('id');
+                    $query->where(function ($q) use ($user, $operadorIds) {
+                        $q->where('assignee_id', $user->id)
+                          ->orWhereIn('assignee_id', $operadorIds);
+                    });
+                } else {
+                    // Operador can only access their assigned tasks
+                    $query->where('assignee_id', $user->id);
+                }
+
+                $task = $query->first();
 
                 if (!$task) {
                     return response()->json([
