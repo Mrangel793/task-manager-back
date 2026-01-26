@@ -47,16 +47,20 @@ class SendTaskCreatedNotification implements ShouldQueue
                 $this->sendEmailNotification($assignee, $task, $creator);
             }
 
-            // 3. Send WEB PUSH notification (if enabled)
-            if ($preferences['web_push'] ?? true) {
-                $assignee->notify(new TaskAssignedNotification($task));
-                Log::info("Web Push notification sent for task {$task->id} to user {$assignee->id}");
-            }
-
-            // 4. Create WHATSAPP notification (if has phone number)
+            // 3. Create WHATSAPP notification (if has phone number)
             $phone = $assignee->whatsapp_phone ?? $assignee->phone;
             if (($preferences['whatsapp'] ?? true) && $phone) {
                 $this->createWhatsAppNotification($assignee, $task, $creator);
+            }
+
+            // 4. Send WEB PUSH notification (if enabled) - in try-catch to not block other notifications
+            try {
+                if ($preferences['web_push'] ?? true) {
+                    $assignee->notify(new TaskAssignedNotification($task));
+                    Log::info("Web Push notification sent for task {$task->id} to user {$assignee->id}");
+                }
+            } catch (\Exception $e) {
+                Log::warning("Web Push notification failed for task {$task->id}: " . $e->getMessage());
             }
 
             Log::info("Task created notifications processed for task {$task->id}");
