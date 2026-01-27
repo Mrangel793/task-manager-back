@@ -44,7 +44,7 @@ class StoreTaskRequest extends FormRequest
         }
 
         // Handle due_time - extract HH:MM from ISO string, converting to local timezone
-        if ($this->has('due_time')) {
+        if ($this->has('due_time') && $this->input('due_time')) {
             $dueTime = $this->input('due_time');
             if (is_string($dueTime)) {
                 // If it's an ISO datetime string (contains T), extract the time in local timezone
@@ -61,6 +61,11 @@ class StoreTaskRequest extends FormRequest
                     $data['due_time'] = substr($dueTime, 0, 5);
                 }
             }
+        }
+
+        // Set default values for optional fields
+        if (!$this->has('priority') || !$this->input('priority')) {
+            $data['priority'] = 'Media';
         }
 
         if (!empty($data)) {
@@ -106,11 +111,11 @@ class StoreTaskRequest extends FormRequest
                 },
             ],
             'due_time' => [
-                'required',
+                'nullable',
                 'date_format:H:i',
             ],
             'priority' => [
-                'required',
+                'nullable',
                 'string',
                 Rule::in(['Baja', 'Media', 'Alta']),
             ],
@@ -161,23 +166,26 @@ class StoreTaskRequest extends FormRequest
     public function withValidator($validator): void
     {
         $validator->after(function ($validator) {
-            // Validate that due_date + due_time is in the future (with 5 minutes tolerance)
-            if (!$validator->errors()->has('due_date') && !$validator->errors()->has('due_time')) {
+            // Only validate datetime if both date and time are provided
+            if (!$validator->errors()->has('due_date')) {
                 $dueDate = $this->input('due_date');
                 $dueTime = $this->input('due_time');
 
-                try {
-                    $dueDateTime = Carbon::parse("{$dueDate} {$dueTime}");
-                    $now = Carbon::now()->subMinutes(5); // 5 minutes tolerance
+                // If due_time is provided, validate the full datetime
+                if ($dueTime) {
+                    try {
+                        $dueDateTime = Carbon::parse("{$dueDate} {$dueTime}");
+                        $now = Carbon::now()->subMinutes(5); // 5 minutes tolerance
 
-                    if ($dueDateTime->lte($now)) {
-                        $validator->errors()->add(
-                            'due_date',
-                            'La fecha y hora de vencimiento debe ser futura (al menos 5 minutos desde ahora).'
-                        );
+                        if ($dueDateTime->lte($now)) {
+                            $validator->errors()->add(
+                                'due_date',
+                                'La fecha y hora de vencimiento debe ser futura (al menos 5 minutos desde ahora).'
+                            );
+                        }
+                    } catch (\Exception $e) {
+                        $validator->errors()->add('due_date', 'La fecha y hora de vencimiento no es válida.');
                     }
-                } catch (\Exception $e) {
-                    $validator->errors()->add('due_date', 'La fecha y hora de vencimiento no es válida.');
                 }
             }
         });
@@ -200,10 +208,8 @@ class StoreTaskRequest extends FormRequest
             'due_date.required' => 'La fecha de vencimiento es obligatoria.',
             'due_date.regex' => 'La fecha debe tener el formato YYYY-MM-DD (ejemplo: 2026-01-21).',
 
-            'due_time.required' => 'La hora de vencimiento es obligatoria.',
             'due_time.date_format' => 'La hora de vencimiento debe tener el formato HH:MM (ejemplo: 14:30).',
 
-            'priority.required' => 'La prioridad es obligatoria.',
             'priority.in' => 'La prioridad debe ser: Baja, Media o Alta.',
 
             'assignee_id.required' => 'Debe asignar la tarea a un operador.',

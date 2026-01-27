@@ -688,7 +688,7 @@ class WhatsAppCommandController extends Controller
         $validator = Validator::make($request->all(), [
             'title' => 'required|string|max:255',
             'due_date' => 'required|date|date_format:Y-m-d',
-            'due_time' => 'required|date_format:H:i',
+            'due_time' => 'nullable|date_format:H:i',
             'assignee_name' => 'required|string',
             'description' => 'nullable|string',
             'priority' => 'nullable|in:Alta,Media,Baja',
@@ -754,14 +754,20 @@ class WhatsAppCommandController extends Controller
             }
 
             // Create task using TaskService
-            $task = $this->taskService->createTask([
+            $taskData = [
                 'title' => $request->title,
                 'description' => $request->description,
                 'priority' => $request->priority ?? 'Media',
                 'due_date' => $request->due_date,
-                'due_time' => $request->due_time,
                 'assignee_id' => $assignee->id,
-            ], $creator);
+            ];
+
+            // Only include due_time if provided
+            if ($request->due_time) {
+                $taskData['due_time'] = $request->due_time;
+            }
+
+            $task = $this->taskService->createTask($taskData, $creator);
 
             $priorityEmoji = match ($task->priority) {
                 'Alta' => '🔴',
@@ -770,12 +776,18 @@ class WhatsAppCommandController extends Controller
                 default => '⚪',
             };
 
+            // Format due date/time message
+            $vencimiento = $task->due_date_carbon->format('d/m/Y');
+            if ($task->due_time) {
+                $vencimiento .= " a las {$task->due_time}";
+            }
+
             $message = "✅ *Tarea Creada Exitosamente*\n\n"
                 . "*ID:* `{$task->id}`\n"
                 . "*Título:* {$task->title}\n"
                 . "*Prioridad:* {$priorityEmoji} {$task->priority}\n"
                 . "*Asignado a:* {$assignee->name}\n"
-                . "*Vencimiento:* 📅 {$task->due_date_carbon->format('d/m/Y')} a las {$task->due_time}\n\n"
+                . "*Vencimiento:* 📅 {$vencimiento}\n\n"
                 . "_El usuario asignado recibirá una notificación._";
 
             return response()->json([
