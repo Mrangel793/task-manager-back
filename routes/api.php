@@ -5,6 +5,7 @@ use App\Http\Controllers\Api\NotificationController;
 use App\Http\Controllers\Api\PushNotificationController;
 use App\Http\Controllers\Api\TaskController;
 use App\Http\Controllers\Api\UserController;
+use App\Http\Controllers\Api\UserTabController;
 use App\Http\Controllers\Api\WhatsAppCommandController;
 use Illuminate\Support\Facades\Route;
 
@@ -62,6 +63,15 @@ Route::prefix('v1')->middleware('auth:sanctum')->group(function () {
         Route::get('vapid-public-key', 'vapidPublicKey')->name('api.push.vapid-key');
         Route::post('subscribe', 'subscribe')->name('api.push.subscribe');
         Route::post('unsubscribe', 'unsubscribe')->name('api.push.unsubscribe');
+    });
+
+    // User Tabs routes (for custom tab synchronization)
+    Route::prefix('tabs')->controller(UserTabController::class)->group(function () {
+        Route::get('/', 'index')->name('api.tabs.index');
+        Route::post('/', 'store')->name('api.tabs.store');
+        Route::patch('{id}', 'update')->name('api.tabs.update');
+        Route::delete('{id}', 'destroy')->name('api.tabs.destroy');
+        Route::post('reorder', 'reorder')->name('api.tabs.reorder');
     });
 
     // Tasks CRUD routes
