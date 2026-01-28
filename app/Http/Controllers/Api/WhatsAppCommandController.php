@@ -77,7 +77,8 @@ class WhatsAppCommandController extends Controller
             . "`/completar [ID]` - Marca la tarea como 'Completada'\n\n"
             . "➕ *Crear tarea:* (Solo Supervisores/Admins)\n"
             . "`/crear [título] | [fecha] | [hora] | [asignado]`\n"
-            . "Ejemplo: `/crear Revisar inventario | 2025-11-10 | 14:30 | Juan Pérez`\n\n"
+            . "Ejemplo: `/crear Revisar inventario | 2025-11-10 | 14:30 | Juan Pérez`\n"
+            . "_Admin: puede crear con solo el título_\n\n"
             . "❓ *Ayuda:*\n"
             . "`/ayuda` - Muestra este mensaje";
 
@@ -679,31 +680,15 @@ class WhatsAppCommandController extends Controller
 
     /**
      * Create a new task (Supervisor/Admin only).
+     * Admin users can create tasks with just a title.
      *
      * @param Request $request
      * @return JsonResponse
      */
     public function createTask(Request $request): JsonResponse
     {
-        $validator = Validator::make($request->all(), [
-            'title' => 'required|string|max:255',
-            'due_date' => 'required|date|date_format:Y-m-d',
-            'due_time' => 'nullable|date_format:H:i',
-            'assignee_name' => 'required|string',
-            'description' => 'nullable|string',
-            'priority' => 'nullable|in:Alta,Media,Baja',
-        ]);
-
-        if ($validator->fails()) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Error de validación: ' . $validator->errors()->first(),
-                'data' => null,
-            ], 400);
-        }
-
         try {
-            // Resolve user from token or whatsapp_phone
+            // Resolve user from token or whatsapp_phone first to determine role
             $creator = $this->resolveUser($request);
 
             if (!$creator) {
@@ -723,34 +708,71 @@ class WhatsAppCommandController extends Controller
                 ], 403);
             }
 
-            // Find assignee by name (fuzzy match)
-            $assigneeName = trim($request->assignee_name);
-            $assignee = User::where('is_active', true)
-                ->where(function ($query) use ($assigneeName) {
-                    $query->where('name', 'LIKE', "%{$assigneeName}%")
-                        ->orWhere('name', 'LIKE', "%{$assigneeName}%");
-                })
-                ->first();
+            // Determine if user is Admin - Admin can create tasks with just title
+            $isAdmin = $creator->hasRole('Admin');
 
-            if (!$assignee) {
-                // Try to find by exact words
-                $nameParts = explode(' ', $assigneeName);
-                foreach ($nameParts as $part) {
-                    if (strlen($part) >= 3) {
-                        $assignee = User::where('is_active', true)
-                            ->where('name', 'LIKE', "%{$part}%")
-                            ->first();
-                        if ($assignee) break;
-                    }
-                }
-            }
+            // Validation rules - due_date and assignee_name are optional for Admin
+            $rules = [
+                'title' => 'required|string|max:255',
+                'due_date' => $isAdmin ? 'nullable|date|date_format:Y-m-d' : 'required|date|date_format:Y-m-d',
+                'due_time' => 'nullable|date_format:H:i',
+                'assignee_name' => $isAdmin ? 'nullable|string' : 'required|string',
+                'description' => 'nullable|string',
+                'priority' => 'nullable|in:Alta,Media,Baja',
+            ];
 
-            if (!$assignee) {
+            $validator = Validator::make($request->all(), $rules);
+
+            if ($validator->fails()) {
                 return response()->json([
                     'success' => false,
-                    'message' => "❌ No se encontró un usuario con el nombre '{$assigneeName}'. Verifica el nombre e intenta nuevamente.",
+                    'message' => 'Error de validación: ' . $validator->errors()->first(),
                     'data' => null,
-                ], 404);
+                ], 400);
+            }
+
+            // Determine assignee
+            $assignee = null;
+
+            if ($request->assignee_name) {
+                // Find assignee by name (fuzzy match)
+                $assigneeName = trim($request->assignee_name);
+                $assignee = User::where('is_active', true)
+                    ->where(function ($query) use ($assigneeName) {
+                        $query->where('name', 'LIKE', "%{$assigneeName}%")
+                            ->orWhere('name', 'LIKE', "%{$assigneeName}%");
+                    })
+                    ->first();
+
+                if (!$assignee) {
+                    // Try to find by exact words
+                    $nameParts = explode(' ', $assigneeName);
+                    foreach ($nameParts as $part) {
+                        if (strlen($part) >= 3) {
+                            $assignee = User::where('is_active', true)
+                                ->where('name', 'LIKE', "%{$part}%")
+                                ->first();
+                            if ($assignee) break;
+                        }
+                    }
+                }
+
+                if (!$assignee) {
+                    return response()->json([
+                        'success' => false,
+                        'message' => "❌ No se encontró un usuario con el nombre '{$assigneeName}'. Verifica el nombre e intenta nuevamente.",
+                        'data' => null,
+                    ], 404);
+                }
+            } elseif ($isAdmin) {
+                // Admin without assignee_name: assign to self
+                $assignee = $creator;
+            }
+
+            // Determine due_date (default to today for Admin if not provided)
+            $dueDate = $request->due_date;
+            if (!$dueDate && $isAdmin) {
+                $dueDate = now()->format('Y-m-d');
             }
 
             // Create task using TaskService
@@ -758,7 +780,7 @@ class WhatsAppCommandController extends Controller
                 'title' => $request->title,
                 'description' => $request->description,
                 'priority' => $request->priority ?? 'Media',
-                'due_date' => $request->due_date,
+                'due_date' => $dueDate,
                 'assignee_id' => $assignee->id,
             ];
 
