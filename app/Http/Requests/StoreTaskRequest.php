@@ -45,8 +45,11 @@ class StoreTaskRequest extends FormRequest
                 }
             }
         } elseif ($isAdmin && (!$this->has('due_date') || !$this->input('due_date'))) {
-            // Admin: default to today if not provided
-            $data['due_date'] = (new \DateTime())->setTimezone($timezone)->format('Y-m-d');
+            // Admin: default to today + 3 days if not provided
+            $date = new \DateTime();
+            $date->setTimezone($timezone);
+            $date->modify('+3 days');
+            $data['due_date'] = $date->format('Y-m-d');
         }
 
         // Handle due_time - extract HH:MM from ISO string, converting to local timezone

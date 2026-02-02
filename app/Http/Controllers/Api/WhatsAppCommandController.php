@@ -749,10 +749,10 @@ class WhatsAppCommandController extends Controller
                 $assignee = $creator;
             }
 
-            // Determine due_date (default to today for Admin if not provided)
+            // Determine due_date (default to today + 3 days for Admin if not provided)
             $dueDate = $request->due_date;
             if (!$dueDate && $isAdmin) {
-                $dueDate = now()->format('Y-m-d');
+                $dueDate = now()->addDays(3)->format('Y-m-d');
             }
 
             // Create task using TaskService
