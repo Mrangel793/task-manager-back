@@ -261,7 +261,7 @@ class Task extends Model
     public function canTransitionTo(string $newStatus): bool
     {
         $validTransitions = [
-            'Pendiente' => ['En Progreso', 'Cancelada'],
+            'Pendiente' => ['En Progreso', 'Completada', 'Cancelada'],
             'En Progreso' => ['Completada', 'Pendiente', 'Cancelada'],
             'Completada' => [],
             'Cancelada' => ['Pendiente'],

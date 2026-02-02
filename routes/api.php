@@ -56,6 +56,9 @@ Route::prefix('v1')->middleware('auth:sanctum')->group(function () {
         Route::get('unread-count', 'unreadCount')->name('api.notifications.unread-count');
         Route::post('mark-all-read', 'markAllAsRead')->name('api.notifications.mark-all-read');
         Route::patch('{id}/read', 'markAsRead')->name('api.notifications.mark-as-read');
+        Route::delete('{id}', 'destroy')->name('api.notifications.destroy');
+        Route::delete('/', 'destroyAll')->name('api.notifications.destroy-all');
+        Route::delete('read', 'destroyRead')->name('api.notifications.destroy-read');
     });
 
     // Push notifications routes

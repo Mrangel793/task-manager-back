@@ -248,6 +248,83 @@ class NotificationController extends Controller
     }
 
     /**
+     * Delete a single notification.
+     *
+     * @param Request $request
+     * @param string $id
+     * @return JsonResponse
+     */
+    public function destroy(Request $request, string $id): JsonResponse
+    {
+        $user = $request->user();
+
+        $notification = Notification::where('id', $id)
+            ->where('user_id', $user->id)
+            ->first();
+
+        if (!$notification) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Notificación no encontrada',
+            ], 404);
+        }
+
+        $notification->delete();
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Notificación eliminada',
+        ]);
+    }
+
+    /**
+     * Delete all user's notifications.
+     *
+     * @param Request $request
+     * @return JsonResponse
+     */
+    public function destroyAll(Request $request): JsonResponse
+    {
+        $user = $request->user();
+
+        $deleted = Notification::where('user_id', $user->id)
+            ->where('channel', 'in_app')
+            ->delete();
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Todas las notificaciones eliminadas',
+            'data' => [
+                'deleted_count' => $deleted,
+            ],
+        ]);
+    }
+
+    /**
+     * Delete only read notifications.
+     *
+     * @param Request $request
+     * @return JsonResponse
+     */
+    public function destroyRead(Request $request): JsonResponse
+    {
+        $user = $request->user();
+
+        $deleted = Notification::where('user_id', $user->id)
+            ->where('channel', 'in_app')
+            ->whereNotNull('read_at')
+            ->delete();
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Notificaciones leídas eliminadas',
+            'data' => [
+                'deleted_count' => $deleted,
+            ],
+        ]);
+    }
+
+    /**
      * Get a human-readable message for the notification (fallback).
      *
      * @param Notification $notification
