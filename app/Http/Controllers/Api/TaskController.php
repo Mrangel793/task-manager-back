@@ -76,10 +76,6 @@ class TaskController extends Controller
                 $query->where('status', $request->status);
             }
 
-            if ($request->has('priority')) {
-                $query->where('priority', $request->priority);
-            }
-
             if ($request->has('due_date_from')) {
                 $query->where('due_date', '>=', $request->due_date_from);
             }

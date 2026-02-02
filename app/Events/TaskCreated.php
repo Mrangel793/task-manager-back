@@ -63,7 +63,6 @@ class TaskCreated implements ShouldBroadcast
                 'id' => $this->task->id,
                 'title' => $this->task->title,
                 'status' => $this->task->status,
-                'priority' => $this->task->priority,
                 'due_date' => $this->task->due_date,
                 'due_time' => $this->task->due_time,
             ],

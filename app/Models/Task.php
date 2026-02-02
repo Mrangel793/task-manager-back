@@ -17,7 +17,6 @@ use Illuminate\Support\Str;
  * @property string $title
  * @property string|null $description
  * @property string $status
- * @property string $priority
  * @property \Illuminate\Support\Carbon $due_date
  * @property string $due_time
  * @property string $assignee_id
@@ -57,7 +56,6 @@ class Task extends Model
         'title',
         'description',
         'status',
-        'priority',
         'due_date',
         'due_time',
         'assignee_id',

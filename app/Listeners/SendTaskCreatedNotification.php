@@ -87,7 +87,6 @@ class SendTaskCreatedNotification implements ShouldQueue
             'data' => [
                 'task_id' => $task->id,
                 'task_title' => $task->title,
-                'priority' => $task->priority,
                 'due_date' => $task->due_date,
                 'due_time' => $task->due_time,
                 'creator_id' => $creator->id,
@@ -151,7 +150,6 @@ class SendTaskCreatedNotification implements ShouldQueue
                 'template_params' => [
                     'user_name' => $user->name,
                     'task_title' => $task->title,
-                    'priority' => $task->priority,
                     'due_date' => $dueDate . $dueTime,
                     'creator_name' => $creator->name,
                 ],

@@ -69,12 +69,11 @@ class TaskAssignedNotification extends Notification implements ShouldQueue
             ->data([
                 'taskId' => $this->task->id,
                 'url' => config('app.frontend_url') . '/tasks/' . $this->task->id,
-                'priority' => $this->task->priority,
                 'status' => $this->task->status,
             ])
             ->options([
                 'TTL' => 3600,
-                'urgency' => $this->task->priority === 'high' ? 'high' : 'normal',
+                'urgency' => 'normal',
             ]);
     }
 
@@ -89,7 +88,6 @@ class TaskAssignedNotification extends Notification implements ShouldQueue
         return [
             'task_id' => $this->task->id,
             'task_title' => $this->task->title,
-            'task_priority' => $this->task->priority,
             'task_due_date' => $this->task->due_date,
         ];
     }

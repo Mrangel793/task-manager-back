@@ -110,11 +110,6 @@ class UpdateTaskRequest extends FormRequest
                 'sometimes',
                 'date_format:H:i',
             ],
-            'priority' => [
-                'sometimes',
-                'string',
-                Rule::in(['Baja', 'Media', 'Alta']),
-            ],
             'status' => [
                 'sometimes',
                 'string',
@@ -218,8 +213,6 @@ class UpdateTaskRequest extends FormRequest
             'due_date.regex' => 'La fecha debe tener el formato YYYY-MM-DD (ejemplo: 2026-01-21).',
 
             'due_time.date_format' => 'La hora de vencimiento debe tener el formato HH:MM (ejemplo: 14:30).',
-
-            'priority.in' => 'La prioridad debe ser: Baja, Media o Alta.',
 
             'status.in' => 'El estado debe ser: Pendiente, En Progreso, Completada o Cancelada.',
 

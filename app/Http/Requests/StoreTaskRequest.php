@@ -69,11 +69,6 @@ class StoreTaskRequest extends FormRequest
             }
         }
 
-        // Set default values for optional fields
-        if (!$this->has('priority') || !$this->input('priority')) {
-            $data['priority'] = 'Media';
-        }
-
         // Admin: default assignee to self if not provided
         if ($isAdmin && (!$this->has('assignee_id') || !$this->input('assignee_id'))) {
             $data['assignee_id'] = $user->id;
@@ -134,11 +129,6 @@ class StoreTaskRequest extends FormRequest
             'due_time' => [
                 'nullable',
                 'date_format:H:i',
-            ],
-            'priority' => [
-                'nullable',
-                'string',
-                Rule::in(['Baja', 'Media', 'Alta']),
             ],
             'assignee_id' => [
                 $assigneeRequired,
@@ -229,8 +219,6 @@ class StoreTaskRequest extends FormRequest
             'due_date.regex' => 'La fecha debe tener el formato YYYY-MM-DD (ejemplo: 2026-01-21).',
 
             'due_time.date_format' => 'La hora de vencimiento debe tener el formato HH:MM (ejemplo: 14:30).',
-
-            'priority.in' => 'La prioridad debe ser: Baja, Media o Alta.',
 
             'assignee_id.required' => 'Debe asignar la tarea a un operador.',
             'assignee_id.uuid' => 'El ID del operador no es válido.',

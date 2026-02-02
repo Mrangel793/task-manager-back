@@ -21,7 +21,7 @@ class NotificationController extends Controller
 
         $query = Notification::where('user_id', $user->id)
             ->where('channel', 'in_app')
-            ->with(['task:id,title,status,priority', 'task.assignee:id,name'])
+            ->with(['task:id,title,status', 'task.assignee:id,name'])
             ->orderBy('created_at', 'desc');
 
         // Optional: filter by read status
@@ -44,7 +44,6 @@ class NotificationController extends Controller
                     'id' => $notification->task->id,
                     'title' => $notification->task->title,
                     'status' => $notification->task->status,
-                    'priority' => $notification->task->priority,
                     'assignee_name' => $notification->task->assignee->name ?? null,
                 ] : null,
                 'is_read' => !is_null($notification->read_at),

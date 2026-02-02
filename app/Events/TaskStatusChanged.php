@@ -79,7 +79,6 @@ class TaskStatusChanged implements ShouldBroadcast
                 'id' => $this->task->id,
                 'title' => $this->task->title,
                 'status' => $this->newStatus,
-                'priority' => $this->task->priority,
             ],
             'old_status' => $this->oldStatus,
             'new_status' => $this->newStatus,

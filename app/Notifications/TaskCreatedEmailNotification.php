@@ -40,13 +40,6 @@ class TaskCreatedEmailNotification extends Notification implements ShouldQueue
      */
     public function toMail(object $notifiable): MailMessage
     {
-        $priorityColor = match ($this->task->priority) {
-            'Alta' => 'red',
-            'Media' => 'orange',
-            'Baja' => 'green',
-            default => 'gray',
-        };
-
         $dueDate = $this->task->formatted_due_date ?? $this->task->due_date;
         $dueTime = $this->task->due_time ?? '';
 
@@ -57,7 +50,6 @@ class TaskCreatedEmailNotification extends Notification implements ShouldQueue
             ->line('')
             ->line('**Detalles de la tarea:**')
             ->line('- **Titulo:** ' . $this->task->title)
-            ->line('- **Prioridad:** ' . $this->task->priority)
             ->line('- **Fecha limite:** ' . $dueDate . ($dueTime ? ' a las ' . $dueTime : ''))
             ->line('- **Asignado por:** ' . $this->creator->name)
             ->line('')

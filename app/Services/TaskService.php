@@ -33,7 +33,6 @@ class TaskService
                 'description' => $data['description'] ?? null,
                 'due_date' => $data['due_date'],
                 'due_time' => $data['due_time'] ?? null,
-                'priority' => $data['priority'] ?? 'Media',
                 'assignee_id' => $data['assignee_id'],
                 'creator_id' => $creator->id,
                 'status' => 'Pendiente',
@@ -48,7 +47,6 @@ class TaskService
                 'to_value' => [
                     'title' => $task->title,
                     'status' => $task->status,
-                    'priority' => $task->priority,
                     'assignee_id' => $task->assignee_id,
                 ],
             ]);
@@ -85,7 +83,7 @@ class TaskService
             $newValues = [];
 
             // Track changes
-            foreach (['title', 'description', 'due_date', 'due_time', 'priority'] as $field) {
+            foreach (['title', 'description', 'due_date', 'due_time'] as $field) {
                 if (isset($data[$field]) && $task->{$field} != $data[$field]) {
                     $oldValues[$field] = $task->{$field};
                     $newValues[$field] = $data[$field];

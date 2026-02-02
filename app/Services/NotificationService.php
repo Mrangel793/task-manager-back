@@ -160,7 +160,6 @@ class NotificationService
                 'message' => "Se te ha asignado la tarea: {$task->title}",
                 'data' => [
                     'task_title' => $task->title,
-                    'priority' => $task->priority,
                     'due_date' => $task->due_date,
                     'due_time' => $task->due_time,
                 ],
@@ -177,12 +176,10 @@ class NotificationService
                 'title' => 'Recordatorio de tarea',
                 'message' => "⏰ *Recordatorio*\n\n"
                     . "La tarea *{$task->title}* vence en 30 minutos.\n\n"
-                    . "*Prioridad:* {$task->priority}\n"
                     . "*Vence:* {$task->formatted_due_date} a las {$task->due_time}\n\n"
                     . "¡No olvides completarla a tiempo!",
                 'data' => [
                     'task_title' => $task->title,
-                    'priority' => $task->priority,
                     'due_date' => $task->due_date,
                     'due_time' => $task->due_time,
                     'status' => $task->status,

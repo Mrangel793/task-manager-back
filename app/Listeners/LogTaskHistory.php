@@ -59,7 +59,6 @@ class LogTaskHistory implements ShouldQueue
             'task_id' => $event->task->id,
             'task_title' => $event->task->title,
             'status' => $event->task->status,
-            'priority' => $event->task->priority,
             'assignee_id' => $event->task->assignee_id,
             'assignee_name' => $event->task->assignee->name,
             'creator_id' => $event->creator->id,
@@ -108,7 +107,6 @@ class LogTaskHistory implements ShouldQueue
             'assignee_name' => $event->assignee->name,
             'assigner_id' => $event->assigner->id,
             'assigner_name' => $event->assigner->name,
-            'priority' => $event->task->priority,
             'status' => $event->task->status,
             'timestamp' => now()->toIso8601String(),
         ]);

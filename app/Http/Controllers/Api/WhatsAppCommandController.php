@@ -140,9 +140,8 @@ class WhatsAppCommandController extends Controller
             // Get tasks (max 15)
             $tasks = $query->orderBy('due_date', 'asc')
                 ->orderBy('due_time', 'asc')
-                ->orderByRaw("FIELD(priority, 'Alta', 'Media', 'Baja')")
                 ->limit(15)
-                ->get(['id', 'title', 'status', 'priority', 'due_date', 'due_time', 'assignee_id']);
+                ->get(['id', 'title', 'status', 'due_date', 'due_time', 'assignee_id']);
 
             if ($tasks->isEmpty()) {
                 return response()->json([
@@ -159,13 +158,6 @@ class WhatsAppCommandController extends Controller
             $showAssignee = $user->hasRole('Admin') || $user->hasRole('Supervisor');
 
             foreach ($tasks as $index => $task) {
-                $priorityEmoji = match ($task->priority) {
-                    'Alta' => '🔴',
-                    'Media' => '🟡',
-                    'Baja' => '🟢',
-                    default => '⚪',
-                };
-
                 $statusEmoji = $task->status === 'En Progreso' ? '▶️' : '⏸️';
 
                 $dueInfo = $task->due_date
@@ -177,10 +169,9 @@ class WhatsAppCommandController extends Controller
                     : '';
 
                 $message .= sprintf(
-                    "%d. %s %s *[%s]*\n   %s\n   📅 %s%s\n\n",
+                    "%d. %s *[%s]*\n   %s\n   📅 %s%s\n\n",
                     $index + 1,
                     $statusEmoji,
-                    $priorityEmoji,
                     $task->id,
                     $task->title,
                     $dueInfo,
@@ -198,7 +189,6 @@ class WhatsAppCommandController extends Controller
                         'id' => $task->id,
                         'title' => $task->title,
                         'status' => $task->status,
-                        'priority' => $task->priority,
                         'due_date' => $task->due_date,
                         'due_time' => $task->due_time,
                         'assignee' => $task->assignee ? [
@@ -352,13 +342,6 @@ class WhatsAppCommandController extends Controller
                 $task = $tasks->first();
             }
 
-            $priorityEmoji = match ($task->priority) {
-                'Alta' => '🔴',
-                'Media' => '🟡',
-                'Baja' => '🟢',
-                default => '⚪',
-            };
-
             $statusEmoji = match ($task->status) {
                 'Pendiente' => '⏸️',
                 'En Progreso' => '▶️',
@@ -375,7 +358,6 @@ class WhatsAppCommandController extends Controller
                 . "*ID:* `{$task->id}`\n"
                 . "*Título:* {$task->title}\n"
                 . "*Estado:* {$statusEmoji} {$task->status}\n"
-                . "*Prioridad:* {$priorityEmoji} {$task->priority}\n"
                 . "*Vencimiento:* 📅 {$dueInfo}\n"
                 . "*Creado por:* {$task->creator->name}\n";
 
@@ -399,7 +381,6 @@ class WhatsAppCommandController extends Controller
                         'title' => $task->title,
                         'description' => $task->description,
                         'status' => $task->status,
-                        'priority' => $task->priority,
                         'due_date' => $task->due_date,
                         'due_time' => $task->due_time,
                         'assignee' => [
@@ -718,7 +699,6 @@ class WhatsAppCommandController extends Controller
                 'due_time' => 'nullable|date_format:H:i',
                 'assignee_name' => $isAdmin ? 'nullable|string' : 'required|string',
                 'description' => 'nullable|string',
-                'priority' => 'nullable|in:Alta,Media,Baja',
             ];
 
             $validator = Validator::make($request->all(), $rules);
@@ -779,7 +759,6 @@ class WhatsAppCommandController extends Controller
             $taskData = [
                 'title' => $request->title,
                 'description' => $request->description,
-                'priority' => $request->priority ?? 'Media',
                 'due_date' => $dueDate,
                 'assignee_id' => $assignee->id,
             ];
@@ -791,13 +770,6 @@ class WhatsAppCommandController extends Controller
 
             $task = $this->taskService->createTask($taskData, $creator);
 
-            $priorityEmoji = match ($task->priority) {
-                'Alta' => '🔴',
-                'Media' => '🟡',
-                'Baja' => '🟢',
-                default => '⚪',
-            };
-
             // Format due date/time message
             $vencimiento = $task->due_date_carbon->format('d/m/Y');
             if ($task->due_time) {
@@ -807,7 +779,6 @@ class WhatsAppCommandController extends Controller
             $message = "✅ *Tarea Creada Exitosamente*\n\n"
                 . "*ID:* `{$task->id}`\n"
                 . "*Título:* {$task->title}\n"
-                . "*Prioridad:* {$priorityEmoji} {$task->priority}\n"
                 . "*Asignado a:* {$assignee->name}\n"
                 . "*Vencimiento:* 📅 {$vencimiento}\n\n"
                 . "_El usuario asignado recibirá una notificación._";
@@ -821,7 +792,6 @@ class WhatsAppCommandController extends Controller
                         'title' => $task->title,
                         'description' => $task->description,
                         'status' => $task->status,
-                        'priority' => $task->priority,
                         'due_date' => $task->due_date_carbon->format('Y-m-d'),
                         'due_time' => $task->due_time,
                         'assignee' => [

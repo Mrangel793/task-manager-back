@@ -35,7 +35,6 @@ class UserResource extends JsonResource
                         'id' => $task->id,
                         'title' => $task->title,
                         'status' => $task->status,
-                        'priority' => $task->priority,
                         'due_date' => $task->due_date,
                     ];
                 });
@@ -47,7 +46,6 @@ class UserResource extends JsonResource
                         'id' => $task->id,
                         'title' => $task->title,
                         'status' => $task->status,
-                        'priority' => $task->priority,
                         'due_date' => $task->due_date,
                     ];
                 });
