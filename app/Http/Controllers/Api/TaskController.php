@@ -13,6 +13,7 @@ use App\Services\TaskService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
 
 class TaskController extends Controller
@@ -49,14 +50,15 @@ class TaskController extends Controller
                 // Admin can see all tasks
             } elseif ($user->hasRole('Supervisor')) {
                 // Supervisor can see tasks assigned to them or created by them or assigned to Operadores
-                $query->where(function ($q) use ($user) {
+                // Cache Operador IDs for 5 minutes to avoid repeated queries
+                $operadorIds = Cache::remember('operador_user_ids', 300, function () {
+                    return User::role('Operador')->pluck('id')->toArray();
+                });
+
+                $query->where(function ($q) use ($user, $operadorIds) {
                     $q->where('assignee_id', $user->id)
                         ->orWhere('creator_id', $user->id)
-                        ->orWhereHas('assignee', function ($q) {
-                            $q->whereHas('roles', function ($q) {
-                                $q->where('name', 'Operador');
-                            });
-                        });
+                        ->orWhereIn('assignee_id', $operadorIds);
                 });
             } else {
                 // Operador can only see tasks assigned to them

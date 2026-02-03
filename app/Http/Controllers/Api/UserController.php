@@ -11,6 +11,7 @@ use App\Notifications\WelcomeUserNotification;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
 
 class UserController extends Controller
@@ -114,6 +115,9 @@ class UserController extends Controller
 
             // Assign role
             $user->assignRole($request->role);
+
+            // Invalidate operador IDs cache when creating new users
+            Cache::forget('operador_user_ids');
 
             // Send welcome email with credentials
             if ($user->email) {
@@ -242,6 +246,8 @@ class UserController extends Controller
                 $updateData['role'] = $request->role;
                 // Update Spatie role as well
                 $user->syncRoles([$request->role]);
+                // Invalidate operador IDs cache when roles change
+                Cache::forget('operador_user_ids');
             }
 
             if ($request->has('is_active') && $request->user()->hasRole('Admin')) {
@@ -292,6 +298,9 @@ class UserController extends Controller
 
             // Soft delete
             $user->delete();
+
+            // Invalidate operador IDs cache
+            Cache::forget('operador_user_ids');
 
             return response()->json([
                 'success' => true,

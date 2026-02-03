@@ -9,6 +9,7 @@ use App\Models\WhatsAppMessage;
 use App\Services\TaskService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Validator;
@@ -127,7 +128,7 @@ class WhatsAppCommandController extends Controller
                 // Admin can see all tasks
             } elseif ($user->hasRole('Supervisor')) {
                 // Supervisor can see their tasks + tasks assigned to Operadores
-                $operadorIds = User::role('Operador')->pluck('id');
+                $operadorIds = Cache::remember('operador_user_ids', 300, fn() => User::role('Operador')->pluck('id')->toArray());
                 $query->where(function ($q) use ($user, $operadorIds) {
                     $q->where('assignee_id', $user->id)
                       ->orWhereIn('assignee_id', $operadorIds);
@@ -259,7 +260,7 @@ class WhatsAppCommandController extends Controller
                 // Admin can see all tasks
             } elseif ($user->hasRole('Supervisor')) {
                 // Supervisor can see their tasks + tasks assigned to Operadores
-                $operadorIds = User::role('Operador')->pluck('id');
+                $operadorIds = Cache::remember('operador_user_ids', 300, fn() => User::role('Operador')->pluck('id')->toArray());
                 $query->where(function ($q) use ($user, $operadorIds) {
                     $q->where('assignee_id', $user->id)
                       ->orWhereIn('assignee_id', $operadorIds);
@@ -460,7 +461,7 @@ class WhatsAppCommandController extends Controller
                     // Admin can access all tasks
                 } elseif ($user->hasRole('Supervisor')) {
                     // Supervisor can access their tasks + Operadores' tasks
-                    $operadorIds = User::role('Operador')->pluck('id');
+                    $operadorIds = Cache::remember('operador_user_ids', 300, fn() => User::role('Operador')->pluck('id')->toArray());
                     $query->where(function ($q) use ($user, $operadorIds) {
                         $q->where('assignee_id', $user->id)
                           ->orWhereIn('assignee_id', $operadorIds);
@@ -587,7 +588,7 @@ class WhatsAppCommandController extends Controller
                     // Admin can access all tasks
                 } elseif ($user->hasRole('Supervisor')) {
                     // Supervisor can access their tasks + Operadores' tasks
-                    $operadorIds = User::role('Operador')->pluck('id');
+                    $operadorIds = Cache::remember('operador_user_ids', 300, fn() => User::role('Operador')->pluck('id')->toArray());
                     $query->where(function ($q) use ($user, $operadorIds) {
                         $q->where('assignee_id', $user->id)
                           ->orWhereIn('assignee_id', $operadorIds);
