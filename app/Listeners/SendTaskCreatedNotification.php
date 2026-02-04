@@ -158,6 +158,7 @@ class SendTaskCreatedNotification implements ShouldQueue
                 'template_params' => [
                     'user_name' => $user->name,
                     'task_title' => $task->title,
+                    'priority' => 'Normal', // Valor por defecto para compatibilidad con template
                     'due_date' => $dueDate . $dueTime,
                     'creator_name' => $creator->name,
                 ],
