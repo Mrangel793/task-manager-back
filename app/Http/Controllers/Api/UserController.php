@@ -41,18 +41,15 @@ class UserController extends Controller
 
             $query = User::query();
 
-            // Apply RBAC logic
+            // Apply RBAC logic (don't load tasks for listing - only load when needed)
             if ($user->hasRole('Admin')) {
                 // Admin can see all users
-                $query->with(['tasksAssigned', 'tasksCreated']);
             } elseif ($user->hasRole('Supervisor')) {
                 // Supervisor can see all Operadores
-                $query->where('role', 'Operador')
-                    ->with(['tasksAssigned', 'tasksCreated']);
+                $query->where('role', 'Operador');
             } else {
                 // Operador can only see themselves
-                $query->where('id', $user->id)
-                    ->with(['tasksAssigned', 'tasksCreated']);
+                $query->where('id', $user->id);
             }
 
             // Apply filters
