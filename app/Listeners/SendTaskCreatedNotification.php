@@ -2,6 +2,7 @@
 
 namespace App\Listeners;
 
+use App\Events\TaskAssigned;
 use App\Events\TaskCreated;
 use App\Models\Notification;
 use App\Models\User;
@@ -18,21 +19,28 @@ class SendTaskCreatedNotification implements ShouldQueue
     /**
      * Handle the event.
      *
-     * Send notifications to assignee when a task is created:
+     * Send notifications to assignee when a task is created or assigned:
      * - In-app notification
      * - Email notification
      * - WhatsApp notification (if enabled)
      * - Web Push notification (if enabled)
      *
-     * @param TaskCreated $event
+     * @param TaskCreated|TaskAssigned $event
      * @return void
      */
-    public function handle(TaskCreated $event): void
+    public function handle(TaskCreated|TaskAssigned $event): void
     {
         try {
             $task = $event->task;
-            $assignee = $task->assignee;
-            $creator = $event->creator;
+
+            // Handle both TaskCreated and TaskAssigned events
+            if ($event instanceof TaskAssigned) {
+                $assignee = $event->assignee;
+                $creator = $event->assigner;
+            } else {
+                $assignee = $task->assignee;
+                $creator = $event->creator;
+            }
 
             Log::info("Processing task created notification for task {$task->id} assigned to {$assignee->id}");
 
@@ -166,7 +174,7 @@ class SendTaskCreatedNotification implements ShouldQueue
     /**
      * Handle a job failure.
      */
-    public function failed(TaskCreated $event, \Throwable $exception): void
+    public function failed(TaskCreated|TaskAssigned $event, \Throwable $exception): void
     {
         Log::error('SendTaskCreatedNotification listener failed: ' . $exception->getMessage(), [
             'task_id' => $event->task->id ?? null,
