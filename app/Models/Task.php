@@ -240,14 +240,39 @@ class Task extends Model
 
     /**
      * Scope a query to only include overdue tasks.
+     * Uses today's date (not datetime) for consistent comparison.
      *
      * @param Builder $query
      * @return Builder
      */
     public function scopeOverdue(Builder $query): Builder
     {
-        return $query->where('due_date', '<', now())
+        return $query->where('due_date', '<', now()->format('Y-m-d'))
             ->whereNotIn('status', ['Completada', 'Cancelada']);
+    }
+
+    /**
+     * Check if task is overdue.
+     * A task is overdue if its due_date is before today and it's not completed/cancelled.
+     *
+     * @return bool
+     */
+    public function isOverdue(): bool
+    {
+        if (!$this->due_date) {
+            return false;
+        }
+
+        // Task is NOT overdue if already completed or cancelled
+        if (in_array($this->status, ['Completada', 'Cancelada'])) {
+            return false;
+        }
+
+        // Compare date only (not datetime) for consistent behavior
+        $dueDate = $this->due_date;
+        $today = now()->format('Y-m-d');
+
+        return $dueDate < $today;
     }
 
     /**
