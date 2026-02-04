@@ -51,14 +51,17 @@ class UserResource extends JsonResource
                 });
             }),
 
-            // Include permissions and roles only for authenticated user or admins
+            // Include permissions and roles only when viewing a single user (not in listings)
+            // This avoids N+1 queries when listing multiple users
             'permissions' => $this->when(
-                $request->user()?->hasRole('Admin') || $request->user()?->id === $this->id,
+                $request->routeIs('api.users.show', 'api.auth.me') &&
+                ($request->user()?->hasRole('Admin') || $request->user()?->id === $this->id),
                 fn() => $this->getAllPermissions()->pluck('name')
             ),
 
             'roles' => $this->when(
-                $request->user()?->hasRole('Admin') || $request->user()?->id === $this->id,
+                $request->routeIs('api.users.show', 'api.auth.me') &&
+                ($request->user()?->hasRole('Admin') || $request->user()?->id === $this->id),
                 fn() => $this->getRoleNames()
             ),
         ];

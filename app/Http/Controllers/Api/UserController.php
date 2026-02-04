@@ -39,7 +39,12 @@ class UserController extends Controller
         try {
             $user = $request->user();
 
-            $query = User::query();
+            // Select only needed columns for listing (faster query)
+            $query = User::select([
+                'id', 'name', 'email', 'phone', 'role',
+                'is_active', 'whatsapp_phone', 'whatsapp_verified',
+                'created_at', 'updated_at'
+            ]);
 
             // Apply RBAC logic (don't load tasks for listing - only load when needed)
             if ($user->hasRole('Admin')) {
