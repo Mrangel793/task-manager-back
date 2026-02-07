@@ -185,13 +185,14 @@ class TaskService
         try {
             DB::beginTransaction();
 
-            // Validate new assignee is an active Operador
-            if (!$newAssignee->hasRole('Operador')) {
-                throw new \Exception('Solo se pueden asignar tareas a operadores.');
+            // Validate new assignee is active
+            if (!$newAssignee->is_active) {
+                throw new \Exception('El usuario seleccionado no está activo.');
             }
 
-            if (!$newAssignee->is_active) {
-                throw new \Exception('El operador seleccionado no está activo.');
+            // Non-Admin can only reassign to Operadores
+            if (!$user->hasRole('Admin') && !$newAssignee->hasRole('Operador')) {
+                throw new \Exception('Solo se pueden asignar tareas a operadores.');
             }
 
             $oldAssigneeId = $task->assignee_id;

@@ -146,8 +146,8 @@ class UpdateTaskRequest extends FormRequest
                         return; // Allow self-assignment
                     }
 
-                    // If assigning to someone else, must be an active Operador
-                    if (!$assignee->hasRole('Operador')) {
+                    // If assigning to someone else, Admin can assign to anyone, others only to Operadores
+                    if (!$currentUser->hasRole('Admin') && !$assignee->hasRole('Operador')) {
                         $fail('Solo se pueden asignar tareas a operadores.');
                         return;
                     }
