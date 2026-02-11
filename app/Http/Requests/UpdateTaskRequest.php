@@ -113,7 +113,7 @@ class UpdateTaskRequest extends FormRequest
             'status' => [
                 'sometimes',
                 'string',
-                Rule::in(['Pendiente', 'En Progreso', 'Completada', 'Cancelada']),
+                Rule::in(['Pendiente', 'En Progreso', 'Por Verificar', 'Completada', 'Cancelada']),
                 function ($attribute, $value, $fail) {
                     // Validate status transition is allowed
                     $task = $this->route('task');
@@ -214,7 +214,7 @@ class UpdateTaskRequest extends FormRequest
 
             'due_time.date_format' => 'La hora de vencimiento debe tener el formato HH:MM (ejemplo: 14:30).',
 
-            'status.in' => 'El estado debe ser: Pendiente, En Progreso, Completada o Cancelada.',
+            'status.in' => 'El estado debe ser: Pendiente, En Progreso, Por Verificar, Completada o Cancelada.',
 
             'assignee_id.uuid' => 'El ID del operador no es válido.',
             'assignee_id.exists' => 'El operador seleccionado no existe.',

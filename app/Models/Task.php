@@ -248,7 +248,7 @@ class Task extends Model
     public function scopeOverdue(Builder $query): Builder
     {
         return $query->where('due_date', '<', now()->format('Y-m-d'))
-            ->whereNotIn('status', ['Completada', 'Cancelada']);
+            ->whereNotIn('status', ['Por Verificar', 'Completada', 'Cancelada']);
     }
 
     /**
@@ -264,7 +264,7 @@ class Task extends Model
         }
 
         // Task is NOT overdue if already completed or cancelled
-        if (in_array($this->status, ['Completada', 'Cancelada'])) {
+        if (in_array($this->status, ['Por Verificar', 'Completada', 'Cancelada'])) {
             return false;
         }
 
@@ -285,7 +285,8 @@ class Task extends Model
     {
         $validTransitions = [
             'Pendiente' => ['En Progreso', 'Completada', 'Cancelada'],
-            'En Progreso' => ['Completada', 'Pendiente', 'Cancelada'],
+            'En Progreso' => ['Por Verificar', 'Completada', 'Pendiente', 'Cancelada'],
+            'Por Verificar' => ['Completada', 'En Progreso', 'Cancelada'],
             'Completada' => [],
             'Cancelada' => ['Pendiente'],
         ];
