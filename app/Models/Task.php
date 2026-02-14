@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Models\Traits\BelongsToOrganization;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -31,7 +32,7 @@ use Illuminate\Support\Str;
  */
 class Task extends Model
 {
-    use HasFactory, SoftDeletes;
+    use BelongsToOrganization, HasFactory, SoftDeletes;
 
     /**
      * Indicates if the IDs are auto-incrementing.
@@ -53,6 +54,7 @@ class Task extends Model
      * @var array<int, string>
      */
     protected $fillable = [
+        'organization_id',
         'title',
         'description',
         'status',

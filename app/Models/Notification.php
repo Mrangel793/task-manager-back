@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Models\Traits\BelongsToOrganization;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -27,7 +28,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  */
 class Notification extends Model
 {
-    use HasFactory, HasUuids;
+    use BelongsToOrganization, HasFactory, HasUuids;
 
     /**
      * The attributes that are mass assignable.
@@ -35,6 +36,7 @@ class Notification extends Model
      * @var array<int, string>
      */
     protected $fillable = [
+        'organization_id',
         'user_id',
         'task_id',
         'channel',

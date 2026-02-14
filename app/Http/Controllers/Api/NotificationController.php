@@ -166,7 +166,8 @@ class NotificationController extends Controller
     {
         $limit = $request->get('limit', 10);
 
-        $notifications = Notification::where('channel', 'whatsapp')
+        $notifications = Notification::withoutGlobalScopes()
+            ->where('channel', 'whatsapp')
             ->where('status', 'pending')
             ->where('retry_count', '<', 3) // Max 3 retries
             ->with(['user:id,name,phone,whatsapp_phone', 'task:id,title'])
@@ -205,7 +206,7 @@ class NotificationController extends Controller
      */
     public function updateStatus(Request $request, string $id): JsonResponse
     {
-        $notification = Notification::find($id);
+        $notification = Notification::withoutGlobalScopes()->find($id);
 
         if (!$notification) {
             return response()->json([

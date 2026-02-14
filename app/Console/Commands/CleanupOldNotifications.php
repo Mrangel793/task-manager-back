@@ -38,8 +38,8 @@ class CleanupOldNotifications extends Command
 
             $this->info("Deleting notifications created before {$cutoffDate->format('Y-m-d H:i:s')}");
 
-            // Count notifications to be deleted
-            $count = Notification::where('created_at', '<', $cutoffDate)->count();
+            // Count notifications to be deleted (across all organizations)
+            $count = Notification::withoutGlobalScopes()->where('created_at', '<', $cutoffDate)->count();
 
             if ($count === 0) {
                 $this->info('No old notifications found to delete.');
@@ -47,7 +47,7 @@ class CleanupOldNotifications extends Command
             }
 
             // Delete old notifications
-            $deleted = Notification::where('created_at', '<', $cutoffDate)->delete();
+            $deleted = Notification::withoutGlobalScopes()->where('created_at', '<', $cutoffDate)->delete();
 
             $this->info("Successfully deleted {$deleted} notification(s).");
             Log::info("Cleanup completed: {$deleted} old notifications deleted");

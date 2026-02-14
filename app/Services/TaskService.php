@@ -29,6 +29,7 @@ class TaskService
 
             // Create task
             $task = Task::create([
+                'organization_id' => $creator->organization_id,
                 'title' => $data['title'],
                 'description' => $data['description'] ?? null,
                 'due_date' => $data['due_date'],
@@ -40,6 +41,7 @@ class TaskService
 
             // Create history record
             TaskHistory::create([
+                'organization_id' => $creator->organization_id,
                 'task_id' => $task->id,
                 'user_id' => $creator->id,
                 'action' => 'created',
@@ -97,6 +99,7 @@ class TaskService
 
                 // Create history record
                 TaskHistory::create([
+                    'organization_id' => $task->organization_id,
                     'task_id' => $task->id,
                     'user_id' => $user->id,
                     'action' => 'updated',
@@ -151,6 +154,7 @@ class TaskService
 
             // Create history record
             TaskHistory::create([
+                'organization_id' => $task->organization_id,
                 'task_id' => $task->id,
                 'user_id' => $user->id,
                 'action' => 'status_changed',
@@ -190,6 +194,11 @@ class TaskService
                 throw new \Exception('El usuario seleccionado no está activo.');
             }
 
+            // Validate assignee belongs to same organization
+            if ($newAssignee->organization_id !== $task->organization_id) {
+                throw new \Exception('El usuario seleccionado no pertenece a la misma organización.');
+            }
+
             // Non-Admin can only reassign to Operadores
             if (!$user->hasRole('Admin') && !$newAssignee->hasRole('Operador')) {
                 throw new \Exception('Solo se pueden asignar tareas a operadores.');
@@ -202,6 +211,7 @@ class TaskService
 
             // Create history record
             TaskHistory::create([
+                'organization_id' => $task->organization_id,
                 'task_id' => $task->id,
                 'user_id' => $user->id,
                 'action' => 'reassigned',
@@ -237,6 +247,7 @@ class TaskService
 
             // Create history record before deleting
             TaskHistory::create([
+                'organization_id' => $task->organization_id,
                 'task_id' => $task->id,
                 'user_id' => $user->id,
                 'action' => 'deleted',

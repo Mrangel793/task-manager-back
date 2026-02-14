@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Models\Traits\BelongsToOrganization;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -22,7 +23,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  */
 class TaskHistory extends Model
 {
-    use HasFactory, HasUuids;
+    use BelongsToOrganization, HasFactory, HasUuids;
 
     /**
      * Indicates if the model should be timestamped.
@@ -37,6 +38,7 @@ class TaskHistory extends Model
      * @var array<int, string>
      */
     protected $fillable = [
+        'organization_id',
         'task_id',
         'user_id',
         'action',

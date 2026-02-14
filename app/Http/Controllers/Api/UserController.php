@@ -101,8 +101,9 @@ class UserController extends Controller
             // Store plain password before hashing (for email notification)
             $plainPassword = $request->password;
 
-            // Create user
+            // Create user (organization_id auto-set by BelongsToOrganization trait)
             $user = User::create([
+                'organization_id' => $request->user()->organization_id,
                 'email' => $request->email,
                 'phone' => $request->phone,
                 'name' => $request->name,
@@ -119,7 +120,7 @@ class UserController extends Controller
             $user->assignRole($request->role);
 
             // Invalidate operador IDs cache when creating new users
-            Cache::forget('operador_user_ids');
+            Cache::forget('operador_user_ids_' . $request->user()->organization_id);
 
             // Send welcome email with credentials
             if ($user->email) {
@@ -249,7 +250,7 @@ class UserController extends Controller
                 // Update Spatie role as well
                 $user->syncRoles([$request->role]);
                 // Invalidate operador IDs cache when roles change
-                Cache::forget('operador_user_ids');
+                Cache::forget('operador_user_ids_' . $request->user()->organization_id);
             }
 
             if ($request->has('is_active') && $request->user()->hasRole('Admin')) {
@@ -302,7 +303,7 @@ class UserController extends Controller
             $user->delete();
 
             // Invalidate operador IDs cache
-            Cache::forget('operador_user_ids');
+            Cache::forget('operador_user_ids_' . $request->user()->organization_id);
 
             return response()->json([
                 'success' => true,

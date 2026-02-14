@@ -29,7 +29,7 @@ class UpdateUserRole extends Command
         $phone = $this->argument('phone');
         $role = $this->argument('role');
 
-        $user = User::where('phone', $phone)->first();
+        $user = User::withoutGlobalScopes()->where('phone', $phone)->first();
 
         if (!$user) {
             $this->error("User with phone {$phone} not found!");

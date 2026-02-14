@@ -3,6 +3,7 @@
 namespace App\Console\Commands;
 
 use App\Jobs\SendTaskReminderJob;
+use App\Models\Organization;
 use App\Models\Task;
 use Carbon\Carbon;
 use Illuminate\Console\Command;
@@ -41,11 +42,12 @@ class SendTaskReminders extends Command
 
             $this->info("Looking for tasks due between {$startWindow->format('H:i')} and {$endWindow->format('H:i')}");
 
-            // Find tasks that are:
+            // Find tasks across all organizations (console has no auth context)
             // 1. Due today
             // 2. Have due_time within the 30-minute window
             // 3. Are still Pendiente or En Progreso
-            $tasks = Task::whereIn('status', ['Pendiente', 'En Progreso'])
+            $tasks = Task::withoutGlobalScopes()
+                ->whereIn('status', ['Pendiente', 'En Progreso'])
                 ->whereDate('due_date', Carbon::today())
                 ->get()
                 ->filter(function ($task) use ($startWindow, $endWindow) {

@@ -22,6 +22,20 @@ class RegisterRequest extends FormRequest
     public function rules(): array
     {
         return [
+            'organization_name' => [
+                'required_without:invite_code',
+                'nullable',
+                'string',
+                'min:3',
+                'max:100',
+            ],
+            'invite_code' => [
+                'required_without:organization_name',
+                'nullable',
+                'string',
+                'size:8',
+                'exists:organizations,invite_code',
+            ],
             'email' => [
                 'required',
                 'email',
@@ -63,6 +77,14 @@ class RegisterRequest extends FormRequest
     public function messages(): array
     {
         return [
+            'organization_name.required_without' => 'El nombre de la organización es obligatorio si no proporcionas un código de invitación.',
+            'organization_name.min' => 'El nombre de la organización debe tener al menos :min caracteres.',
+            'organization_name.max' => 'El nombre de la organización no puede exceder :max caracteres.',
+
+            'invite_code.required_without' => 'El código de invitación es obligatorio si no proporcionas un nombre de organización.',
+            'invite_code.size' => 'El código de invitación debe tener exactamente :size caracteres.',
+            'invite_code.exists' => 'El código de invitación no es válido.',
+
             'email.required' => 'El correo electrónico es obligatorio.',
             'email.email' => 'El correo electrónico debe ser una dirección válida.',
             'email.unique' => 'Este correo electrónico ya está registrado.',

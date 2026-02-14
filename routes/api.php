@@ -30,7 +30,7 @@ Route::prefix('v1')->group(function () {
 });
 
 // Protected routes (authentication required)
-Route::prefix('v1')->middleware('auth:sanctum')->group(function () {
+Route::prefix('v1')->middleware(['auth:sanctum', 'org.context'])->group(function () {
     Route::prefix('auth')->controller(AuthController::class)->group(function () {
         Route::post('logout', 'logout')->name('api.auth.logout');
         Route::post('refresh-token', 'refreshToken')->name('api.auth.refresh-token');

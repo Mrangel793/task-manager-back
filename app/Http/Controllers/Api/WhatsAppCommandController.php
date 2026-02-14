@@ -41,22 +41,30 @@ class WhatsAppCommandController extends Controller
      */
     protected function resolveUser(Request $request): ?User
     {
+        $user = null;
+
         // Priority 1: If Bearer token is provided, authenticate with Sanctum
         if ($request->bearerToken()) {
-            $user = \Laravel\Sanctum\PersonalAccessToken::findToken($request->bearerToken());
-            if ($user && $user->tokenable) {
-                return $user->tokenable;
+            $token = \Laravel\Sanctum\PersonalAccessToken::findToken($request->bearerToken());
+            if ($token && $token->tokenable) {
+                $user = $token->tokenable;
             }
         }
 
         // Priority 2: If whatsapp_phone is provided, find user by that
-        if ($request->has('whatsapp_phone')) {
-            return User::where('whatsapp_phone', $request->whatsapp_phone)
+        if (!$user && $request->has('whatsapp_phone')) {
+            $user = User::withoutGlobalScopes()
+                ->where('whatsapp_phone', $request->whatsapp_phone)
                 ->where('whatsapp_verified', true)
                 ->first();
         }
 
-        return null;
+        // Set organization context if user found
+        if ($user && $user->organization_id) {
+            app()->instance('current_organization_id', $user->organization_id);
+        }
+
+        return $user;
     }
 
     /**
@@ -128,7 +136,7 @@ class WhatsAppCommandController extends Controller
                 // Admin can see all tasks
             } elseif ($user->hasRole('Supervisor')) {
                 // Supervisor can see their tasks + tasks assigned to Operadores
-                $operadorIds = Cache::remember('operador_user_ids', 300, fn() => User::role('Operador')->pluck('id')->toArray());
+                $operadorIds = Cache::remember("operador_user_ids_{$user->organization_id}", 300, fn() => User::role('Operador')->pluck('id')->toArray());
                 $query->where(function ($q) use ($user, $operadorIds) {
                     $q->where('assignee_id', $user->id)
                       ->orWhereIn('assignee_id', $operadorIds);
@@ -260,7 +268,7 @@ class WhatsAppCommandController extends Controller
                 // Admin can see all tasks
             } elseif ($user->hasRole('Supervisor')) {
                 // Supervisor can see their tasks + tasks assigned to Operadores
-                $operadorIds = Cache::remember('operador_user_ids', 300, fn() => User::role('Operador')->pluck('id')->toArray());
+                $operadorIds = Cache::remember("operador_user_ids_{$user->organization_id}", 300, fn() => User::role('Operador')->pluck('id')->toArray());
                 $query->where(function ($q) use ($user, $operadorIds) {
                     $q->where('assignee_id', $user->id)
                       ->orWhereIn('assignee_id', $operadorIds);
@@ -461,7 +469,7 @@ class WhatsAppCommandController extends Controller
                     // Admin can access all tasks
                 } elseif ($user->hasRole('Supervisor')) {
                     // Supervisor can access their tasks + Operadores' tasks
-                    $operadorIds = Cache::remember('operador_user_ids', 300, fn() => User::role('Operador')->pluck('id')->toArray());
+                    $operadorIds = Cache::remember("operador_user_ids_{$user->organization_id}", 300, fn() => User::role('Operador')->pluck('id')->toArray());
                     $query->where(function ($q) use ($user, $operadorIds) {
                         $q->where('assignee_id', $user->id)
                           ->orWhereIn('assignee_id', $operadorIds);
@@ -588,7 +596,7 @@ class WhatsAppCommandController extends Controller
                     // Admin can access all tasks
                 } elseif ($user->hasRole('Supervisor')) {
                     // Supervisor can access their tasks + Operadores' tasks
-                    $operadorIds = Cache::remember('operador_user_ids', 300, fn() => User::role('Operador')->pluck('id')->toArray());
+                    $operadorIds = Cache::remember("operador_user_ids_{$user->organization_id}", 300, fn() => User::role('Operador')->pluck('id')->toArray());
                     $query->where(function ($q) use ($user, $operadorIds) {
                         $q->where('assignee_id', $user->id)
                           ->orWhereIn('assignee_id', $operadorIds);

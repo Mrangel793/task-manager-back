@@ -148,6 +148,12 @@ class StoreTaskRequest extends FormRequest
                         return;
                     }
 
+                    // Validate assignee belongs to same organization
+                    if ($assignee->organization_id !== $currentUser->organization_id) {
+                        $fail('El usuario asignado no pertenece a tu organización.');
+                        return;
+                    }
+
                     // Allow users to assign tasks to themselves (using string comparison for UUIDs)
                     if ((string) $assignee->id === (string) $currentUser->id) {
                         // Check if the user is active

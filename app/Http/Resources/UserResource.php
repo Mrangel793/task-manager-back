@@ -28,6 +28,15 @@ class UserResource extends JsonResource
             'updated_at' => $this->updated_at?->toISOString(),
             'last_login_at' => $this->last_login_at?->toISOString(),
 
+            // Organization
+            'organization' => $this->when($this->relationLoaded('organization'), function () {
+                return [
+                    'id' => $this->organization->id,
+                    'name' => $this->organization->name,
+                    'slug' => $this->organization->slug,
+                ];
+            }),
+
             // Optional relationships
             'tasks_assigned' => $this->whenLoaded('tasksAssigned', function () {
                 return $this->tasksAssigned->map(function ($task) {

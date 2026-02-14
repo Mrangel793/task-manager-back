@@ -50,8 +50,9 @@ class TaskController extends Controller
                 // Admin can see all tasks
             } elseif ($user->hasRole('Supervisor')) {
                 // Supervisor can see tasks assigned to them or created by them or assigned to Operadores
-                // Cache Operador IDs for 5 minutes to avoid repeated queries
-                $operadorIds = Cache::remember('operador_user_ids', 300, function () {
+                // Cache Operador IDs for 5 minutes to avoid repeated queries (scoped by organization)
+                $orgId = $user->organization_id;
+                $operadorIds = Cache::remember("operador_user_ids_{$orgId}", 300, function () {
                     return User::role('Operador')->pluck('id')->toArray();
                 });
 

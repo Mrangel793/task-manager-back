@@ -5,11 +5,13 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\LoginRequest;
 use App\Http\Requests\RegisterRequest;
+use App\Models\Organization;
 use App\Models\User;
 use App\Models\WhatsAppSession;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Log;
 
@@ -27,38 +29,78 @@ class AuthController extends Controller
     public function register(RegisterRequest $request): JsonResponse
     {
         try {
+            DB::beginTransaction();
+
+            if ($request->invite_code) {
+                // Join existing organization
+                $organization = Organization::where('invite_code', $request->invite_code)
+                    ->where('is_active', true)
+                    ->firstOrFail();
+
+                $role = 'Operador';
+                $message = 'Usuario registrado exitosamente.';
+            } else {
+                // Create new organization
+                $organization = Organization::create([
+                    'name' => $request->organization_name,
+                    'is_active' => true,
+                ]);
+
+                $role = 'Admin';
+                $message = 'Organización creada exitosamente.';
+            }
+
+            // Set organization context for global scope
+            app()->instance('current_organization_id', $organization->id);
+
             // Create user
             $user = User::create([
+                'organization_id' => $organization->id,
                 'email' => $request->email,
                 'phone' => $request->phone ?? null,
                 'name' => $request->name,
                 'password' => $request->password,
-                'role' => 'Operador',
-                'is_active' => true, // Email-based auth doesn't require verification
+                'role' => $role,
+                'is_active' => true,
             ]);
 
-            // Assign default role
-            $user->assignRole('Operador');
+            // Assign role
+            $user->assignRole($role);
+
+            DB::commit();
 
             // Generate Sanctum token
             $token = $user->createToken('auth_token')->plainTextToken;
 
+            $responseData = [
+                'user' => [
+                    'id' => $user->id,
+                    'email' => $user->email,
+                    'name' => $user->name,
+                    'role' => $user->role,
+                    'is_active' => $user->is_active,
+                ],
+                'organization' => [
+                    'id' => $organization->id,
+                    'name' => $organization->name,
+                    'slug' => $organization->slug,
+                ],
+                'access_token' => $token,
+                'token_type' => 'Bearer',
+            ];
+
+            // Include invite_code only for the org creator (Admin)
+            if ($role === 'Admin') {
+                $responseData['organization']['invite_code'] = $organization->invite_code;
+            }
+
             return response()->json([
                 'success' => true,
-                'message' => 'Usuario registrado exitosamente.',
-                'data' => [
-                    'user' => [
-                        'id' => $user->id,
-                        'email' => $user->email,
-                        'name' => $user->name,
-                        'role' => $user->role,
-                        'is_active' => $user->is_active,
-                    ],
-                    'access_token' => $token,
-                    'token_type' => 'Bearer',
-                ],
+                'message' => $message,
+                'data' => $responseData,
             ], 201);
         } catch (\Exception $e) {
+            DB::rollBack();
             Log::error('Error en registro de usuario: ' . $e->getMessage());
 
             return response()->json([
@@ -87,8 +129,8 @@ class AuthController extends Controller
         ]);
 
         try {
-            // Find user by phone
-            $user = User::where('phone', $request->phone)->first();
+            // Find user by phone (withoutGlobalScopes since user is not authenticated yet)
+            $user = User::withoutGlobalScopes()->where('phone', $request->phone)->first();
 
             if (!$user) {
                 return response()->json([
@@ -160,8 +202,8 @@ class AuthController extends Controller
     public function login(LoginRequest $request): JsonResponse
     {
         try {
-            // Find user by email
-            $user = User::where('email', $request->email)->first();
+            // Find user by email (withoutGlobalScopes since user is not authenticated yet)
+            $user = User::withoutGlobalScopes()->where('email', $request->email)->first();
 
             // Validate credentials
             if (!$user || !Hash::check($request->password, $user->password)) {
@@ -200,6 +242,11 @@ class AuthController extends Controller
                         'is_active' => $user->is_active,
                         'whatsapp_verified' => $user->whatsapp_verified,
                         'permissions' => $user->getAllPermissions()->pluck('name'),
+                    ],
+                    'organization' => [
+                        'id' => $user->organization->id,
+                        'name' => $user->organization->name,
+                        'slug' => $user->organization->slug,
                     ],
                     'access_token' => $token,
                     'token_type' => 'Bearer',
@@ -292,24 +339,41 @@ class AuthController extends Controller
         try {
             $user = $request->user();
 
+            $organization = $user->organization;
+
+            $userData = [
+                'id' => $user->id,
+                'email' => $user->email,
+                'phone' => $user->phone,
+                'name' => $user->name,
+                'role' => $user->role,
+                'is_active' => $user->is_active,
+                'whatsapp_verified' => $user->whatsapp_verified,
+                'whatsapp_phone' => $user->whatsapp_phone,
+                'notification_preferences' => $user->notification_preferences,
+                'permissions' => $user->getAllPermissions()->pluck('name'),
+                'roles' => $user->getRoleNames(),
+                'created_at' => $user->created_at,
+                'updated_at' => $user->updated_at,
+            ];
+
+            $orgData = [
+                'id' => $organization->id,
+                'name' => $organization->name,
+                'slug' => $organization->slug,
+            ];
+
+            // Only Admin can see the invite_code
+            if ($user->hasRole('Admin')) {
+                $orgData['invite_code'] = $organization->invite_code;
+            }
+
+            $userData['organization'] = $orgData;
+
             return response()->json([
                 'success' => true,
                 'data' => [
-                    'user' => [
-                        'id' => $user->id,
-                        'email' => $user->email,
-                        'phone' => $user->phone,
-                        'name' => $user->name,
-                        'role' => $user->role,
-                        'is_active' => $user->is_active,
-                        'whatsapp_verified' => $user->whatsapp_verified,
-                        'whatsapp_phone' => $user->whatsapp_phone,
-                        'notification_preferences' => $user->notification_preferences,
-                        'permissions' => $user->getAllPermissions()->pluck('name'),
-                        'roles' => $user->getRoleNames(),
-                        'created_at' => $user->created_at,
-                        'updated_at' => $user->updated_at,
-                    ],
+                    'user' => $userData,
                 ],
             ], 200);
         } catch (\Exception $e) {
