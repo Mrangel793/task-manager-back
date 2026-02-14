@@ -32,7 +32,7 @@ class AuthController extends Controller
             DB::beginTransaction();
 
             if ($request->invite_code) {
-                // Join existing organization
+                // Join existing organization (no global scope on Organization model)
                 $organization = Organization::where('invite_code', $request->invite_code)
                     ->where('is_active', true)
                     ->firstOrFail();
@@ -50,19 +50,19 @@ class AuthController extends Controller
                 $message = 'Organización creada exitosamente.';
             }
 
-            // Set organization context for global scope
+            // Set organization context for global scope BEFORE creating user
             app()->instance('current_organization_id', $organization->id);
 
             // Create user
-            $user = User::create([
-                'organization_id' => $organization->id,
-                'email' => $request->email,
-                'phone' => $request->phone ?? null,
-                'name' => $request->name,
-                'password' => $request->password,
-                'role' => $role,
-                'is_active' => true,
-            ]);
+            $user = new User();
+            $user->organization_id = $organization->id;
+            $user->email = $request->email;
+            $user->phone = $request->phone ?? null;
+            $user->name = $request->name;
+            $user->password = $request->password;
+            $user->role = $role;
+            $user->is_active = true;
+            $user->save();
 
             // Assign role
             $user->assignRole($role);
@@ -101,12 +101,20 @@ class AuthController extends Controller
             ], 201);
         } catch (\Exception $e) {
             DB::rollBack();
-            Log::error('Error en registro de usuario: ' . $e->getMessage());
+            Log::error('Error en registro de usuario: ' . $e->getMessage(), [
+                'trace' => $e->getTraceAsString(),
+                'file' => $e->getFile(),
+                'line' => $e->getLine(),
+            ]);
 
             return response()->json([
                 'success' => false,
                 'message' => 'Error al registrar el usuario.',
-                'errors' => ['server' => ['Ocurrió un error inesperado. Por favor, inténtelo de nuevo.']],
+                'errors' => ['server' => [$e->getMessage()]],
+                'debug' => config('app.debug') ? [
+                    'exception' => $e->getMessage(),
+                    'file' => $e->getFile() . ':' . $e->getLine(),
+                ] : null,
             ], 500);
         }
     }
