@@ -33,8 +33,9 @@ class SendTaskStatusChangedNotification implements ShouldQueue
 
             Log::info("Processing status change notification for task {$task->id}: {$event->oldStatus} -> {$event->newStatus}");
 
-            // Get all Admin users (except the one who made the change)
+            // Get all Admin users in the same organization (except the one who made the change)
             $admins = User::role('Admin')
+                ->where('organization_id', $task->organization_id)
                 ->where('is_active', true)
                 ->where('id', '!=', $changedBy->id)
                 ->get();
