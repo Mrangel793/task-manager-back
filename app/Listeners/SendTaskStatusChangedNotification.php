@@ -31,6 +31,9 @@ class SendTaskStatusChangedNotification implements ShouldQueue
             $task = $event->task;
             $changedBy = $event->user;
 
+            // Set organization context for queue worker (no HTTP middleware available)
+            app()->instance('current_organization_id', $task->organization_id);
+
             Log::info("Processing status change notification for task {$task->id}: {$event->oldStatus} -> {$event->newStatus}");
 
             // Get all Admin users in the same organization (except the one who made the change)
@@ -96,6 +99,7 @@ class SendTaskStatusChangedNotification implements ShouldQueue
         $task = $event->task;
 
         Notification::create([
+            'organization_id' => $task->organization_id,
             'user_id' => $user->id,
             'task_id' => $task->id,
             'type' => 'task_status_changed',
@@ -135,6 +139,7 @@ class SendTaskStatusChangedNotification implements ShouldQueue
 
             // Record email notification
             Notification::create([
+                'organization_id' => $task->organization_id,
                 'user_id' => $user->id,
                 'task_id' => $task->id,
                 'type' => 'task_status_changed',
@@ -171,6 +176,7 @@ class SendTaskStatusChangedNotification implements ShouldQueue
         };
 
         Notification::create([
+            'organization_id' => $task->organization_id,
             'user_id' => $user->id,
             'task_id' => $task->id,
             'type' => 'task_status_changed',

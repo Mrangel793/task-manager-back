@@ -88,6 +88,7 @@ class TaskObserver
         try {
             // Create history record for restoration
             TaskHistory::create([
+                'organization_id' => $task->organization_id,
                 'task_id' => $task->id,
                 'user_id' => Auth::id(),
                 'action' => 'restored',

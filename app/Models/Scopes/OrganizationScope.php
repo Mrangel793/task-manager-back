@@ -16,6 +16,10 @@ class OrganizationScope implements Scope
 
         if ($organizationId) {
             $builder->where($model->getTable() . '.organization_id', $organizationId);
+        } else {
+            // Fail-closed: sin contexto de organización no se retorna ningún registro.
+            // Usar withoutGlobalScopes() explícitamente en comandos/N8n cuando se requiera acceso cross-org.
+            $builder->whereRaw('0 = 1');
         }
     }
 }

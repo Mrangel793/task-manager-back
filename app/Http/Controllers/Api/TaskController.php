@@ -52,8 +52,8 @@ class TaskController extends Controller
                 // Supervisor can see tasks assigned to them or created by them or assigned to Operadores
                 // Cache Operador IDs for 5 minutes to avoid repeated queries (scoped by organization)
                 $orgId = $user->organization_id;
-                $operadorIds = Cache::remember("operador_user_ids_{$orgId}", 300, function () {
-                    return User::role('Operador')->pluck('id')->toArray();
+                $operadorIds = Cache::remember("operador_user_ids_{$orgId}", 300, function () use ($orgId) {
+                    return User::role('Operador')->where('organization_id', $orgId)->pluck('id')->toArray();
                 });
 
                 $query->where(function ($q) use ($user, $operadorIds) {

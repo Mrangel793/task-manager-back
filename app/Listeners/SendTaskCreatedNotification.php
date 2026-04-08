@@ -33,6 +33,9 @@ class SendTaskCreatedNotification implements ShouldQueue
         try {
             $task = $event->task;
 
+            // Set organization context for queue worker (no HTTP middleware available)
+            app()->instance('current_organization_id', $task->organization_id);
+
             // Handle both TaskCreated and TaskAssigned events
             if ($event instanceof TaskAssigned) {
                 $assignee = $event->assignee;
@@ -86,6 +89,7 @@ class SendTaskCreatedNotification implements ShouldQueue
     private function createInAppNotification(User $user, $task, User $creator): void
     {
         Notification::create([
+            'organization_id' => $task->organization_id,
             'user_id' => $user->id,
             'task_id' => $task->id,
             'type' => 'task_created',
@@ -117,6 +121,7 @@ class SendTaskCreatedNotification implements ShouldQueue
 
             // Record email notification
             Notification::create([
+                'organization_id' => $task->organization_id,
                 'user_id' => $user->id,
                 'task_id' => $task->id,
                 'type' => 'task_created',
@@ -146,6 +151,7 @@ class SendTaskCreatedNotification implements ShouldQueue
         $dueTime = $task->due_time ? " a las {$task->due_time}" : "";
 
         Notification::create([
+            'organization_id' => $task->organization_id,
             'user_id' => $user->id,
             'task_id' => $task->id,
             'type' => 'task_created',
