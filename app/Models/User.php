@@ -40,6 +40,13 @@ class User extends Authenticatable
     use BelongsToOrganization, HasApiTokens, HasFactory, HasPushSubscriptions, HasRoles, HasUuids, Notifiable, SoftDeletes;
 
     /**
+     * Sanctum resuelve tokens vía User::find() sin contexto de organización,
+     * por eso User no puede ser fail-closed en el OrganizationScope.
+     * Los lugares que necesitan consultas cross-org ya usan withoutGlobalScopes().
+     */
+    protected static bool $organizationScopeFailClosed = false;
+
+    /**
      * The attributes that are mass assignable.
      *
      * @var array<int, string>

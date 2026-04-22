@@ -26,6 +26,8 @@ Route::prefix('v1')->group(function () {
         Route::post('register', 'register')->name('api.auth.register');
         Route::post('verify', 'verify')->name('api.auth.verify');
         Route::post('login', 'login')->name('api.auth.login');
+        Route::post('forgot-password', 'forgotPassword')->name('api.auth.forgot-password');
+        Route::post('reset-password', 'resetPassword')->name('api.auth.reset-password');
     });
 });
 

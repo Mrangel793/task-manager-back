@@ -13,7 +13,10 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
+use App\Notifications\ResetPasswordNotification;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Password;
+use Illuminate\Support\Str;
 
 class AuthController extends Controller
 {
@@ -516,6 +519,102 @@ class AuthController extends Controller
                 'success' => false,
                 'message' => 'Error al cambiar la contraseña.',
                 'errors' => ['server' => ['Ocurrió un error inesperado. Por favor, inténtelo de nuevo.']],
+            ], 500);
+        }
+    }
+
+    /**
+     * Send a password reset link to the given email.
+     */
+    public function forgotPassword(Request $request): JsonResponse
+    {
+        $request->validate([
+            'email' => 'required|email',
+        ], [
+            'email.required' => 'El correo electrónico es obligatorio.',
+            'email.email' => 'El correo electrónico no es válido.',
+        ]);
+
+        try {
+            $user = User::withoutGlobalScopes()->where('email', $request->email)->first();
+
+            // Siempre respondemos con éxito para no revelar si el email existe
+            if (!$user) {
+                return response()->json([
+                    'success' => true,
+                    'message' => 'Si el correo existe, recibirás un enlace para restablecer tu contraseña.',
+                ]);
+            }
+
+            $token = Password::createToken($user);
+            $user->notify(new ResetPasswordNotification($token));
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Si el correo existe, recibirás un enlace para restablecer tu contraseña.',
+            ]);
+        } catch (\Exception $e) {
+            Log::error('Error en forgot-password: ' . $e->getMessage());
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Error al procesar la solicitud.',
+                'errors' => ['server' => ['Ocurrió un error inesperado. Por favor, inténtelo de nuevo.']],
+            ], 500);
+        }
+    }
+
+    /**
+     * Reset the user's password using the given token.
+     */
+    public function resetPassword(Request $request): JsonResponse
+    {
+        $request->validate([
+            'token'    => 'required|string',
+            'email'    => 'required|email',
+            'password' => 'required|string|min:8|confirmed',
+        ], [
+            'token.required'    => 'El token es obligatorio.',
+            'email.required'    => 'El correo electrónico es obligatorio.',
+            'email.email'       => 'El correo electrónico no es válido.',
+            'password.required' => 'La nueva contraseña es obligatoria.',
+            'password.min'      => 'La nueva contraseña debe tener al menos 8 caracteres.',
+            'password.confirmed' => 'La confirmación de la contraseña no coincide.',
+        ]);
+
+        try {
+            $status = Password::reset(
+                $request->only('email', 'password', 'password_confirmation', 'token'),
+                function (User $user, string $password) {
+                    $user->forceFill(['password' => $password])->save();
+                }
+            );
+
+            if ($status === Password::PASSWORD_RESET) {
+                return response()->json([
+                    'success' => true,
+                    'message' => 'Contraseña restablecida exitosamente.',
+                ]);
+            }
+
+            $errorMessage = match ($status) {
+                Password::INVALID_TOKEN => 'El token de restablecimiento es inválido o ha expirado.',
+                Password::INVALID_USER  => 'No encontramos un usuario con ese correo electrónico.',
+                default                 => 'No fue posible restablecer la contraseña.',
+            };
+
+            return response()->json([
+                'success' => false,
+                'message' => $errorMessage,
+                'errors'  => ['token' => [$errorMessage]],
+            ], 422);
+        } catch (\Exception $e) {
+            Log::error('Error en reset-password: ' . $e->getMessage());
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Error al restablecer la contraseña.',
+                'errors'  => ['server' => ['Ocurrió un error inesperado. Por favor, inténtelo de nuevo.']],
             ], 500);
         }
     }

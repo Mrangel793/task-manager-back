@@ -10,10 +10,9 @@ class ExampleTest extends TestCase
     /**
      * A basic test example.
      */
-    public function test_the_application_returns_a_successful_response(): void
+    public function test_la_aplicacion_responde_en_rutas_de_auth(): void
     {
-        $response = $this->get('/');
-
-        $response->assertStatus(200);
+        // 422 = la ruta existe y valida (no 404)
+        $this->postJson('/api/v1/auth/login', [])->assertStatus(422);
     }
 }
