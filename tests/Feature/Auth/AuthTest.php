@@ -342,7 +342,10 @@ class AuthTest extends TestCase
         $org = $this->createOrganization();
         $user = $this->createUser($org, 'Admin');
 
-        $this->actingAs($user, 'sanctum')
+        // Necesitamos un token real para que currentAccessToken() no retorne null
+        $token = $user->createToken('test-token')->plainTextToken;
+
+        $this->withToken($token)
             ->postJson('/api/v1/auth/logout')
             ->assertStatus(200)
             ->assertJsonPath('success', true);

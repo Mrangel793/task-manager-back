@@ -284,7 +284,10 @@ class AuthController extends Controller
     {
         try {
             // Revoke current token
-            $request->user()->currentAccessToken()->delete();
+            $token = $request->user()->currentAccessToken();
+            if ($token) {
+                $token->delete();
+            }
 
             return response()->json([
                 'success' => true,
