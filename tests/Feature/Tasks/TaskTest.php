@@ -107,9 +107,25 @@ class TaskTest extends TestCase
         $operador2 = $this->createUser($org, 'Operador');
         $tarea = $this->createTask($org, $admin, $operador2);
 
+        // El middleware check.task.permissions devuelve 403
         $this->actingAs($operador1, 'sanctum')
             ->getJson("/api/v1/tasks/{$tarea->id}")
             ->assertStatus(403);
+    }
+
+    public function test_operador_de_otra_org_no_puede_ver_tarea(): void
+    {
+        $org1 = $this->createOrganization();
+        $org2 = $this->createOrganization();
+        $admin2 = $this->createUser($org2, 'Admin');
+        $operador1 = $this->createUser($org1, 'Operador');
+        $operador2 = $this->createUser($org2, 'Operador');
+        $tarea = $this->createTask($org2, $admin2, $operador2);
+
+        // Tarea de otra org — scope fail-closed devuelve 404
+        $this->actingAs($operador1, 'sanctum')
+            ->getJson("/api/v1/tasks/{$tarea->id}")
+            ->assertStatus(404);
     }
 
     // =========================================================
@@ -154,17 +170,18 @@ class TaskTest extends TestCase
             ])->assertStatus(201);
     }
 
-    public function test_operador_no_puede_crear_tarea(): void
+    public function test_operador_puede_crear_tarea_asignada_a_si_mismo(): void
     {
+        // El rol Operador tiene el permiso 'create-tasks'
         $org = $this->createOrganization();
         $operador = $this->createUser($org, 'Operador');
 
         $this->actingAs($operador, 'sanctum')
             ->postJson('/api/v1/tasks', [
-                'title' => 'Tarea no permitida',
+                'title' => 'Mi propia tarea',
                 'due_date' => now()->addDays(5)->format('Y-m-d'),
                 'assignee_id' => $operador->id,
-            ])->assertStatus(403);
+            ])->assertStatus(201);
     }
 
     public function test_crear_tarea_falla_sin_titulo(): void
