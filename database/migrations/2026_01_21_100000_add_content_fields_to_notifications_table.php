@@ -18,11 +18,11 @@ return new class extends Migration
             $table->json('data')->nullable()->after('message');
         });
 
-        // Update channel enum to include 'email' and 'in_app'
-        DB::statement("ALTER TABLE notifications MODIFY COLUMN channel ENUM('web_push', 'whatsapp', 'email', 'in_app') NOT NULL");
-
-        // Update type enum to include more notification types
-        DB::statement("ALTER TABLE notifications MODIFY COLUMN type ENUM('task_assigned', 'task_created', 'task_reminder', 'task_due_soon', 'task_overdue', 'status_changed', 'task_status_changed', 'task_reassigned') NOT NULL");
+        // SQLite no soporta MODIFY COLUMN — solo ejecutar en MySQL/MariaDB
+        if (DB::getDriverName() === 'mysql') {
+            DB::statement("ALTER TABLE notifications MODIFY COLUMN channel ENUM('web_push', 'whatsapp', 'email', 'in_app') NOT NULL");
+            DB::statement("ALTER TABLE notifications MODIFY COLUMN type ENUM('task_assigned', 'task_created', 'task_reminder', 'task_due_soon', 'task_overdue', 'status_changed', 'task_status_changed', 'task_reassigned') NOT NULL");
+        }
     }
 
     /**
@@ -34,7 +34,9 @@ return new class extends Migration
             $table->dropColumn(['title', 'message', 'data']);
         });
 
-        DB::statement("ALTER TABLE notifications MODIFY COLUMN channel ENUM('web_push', 'whatsapp', 'email') NOT NULL");
-        DB::statement("ALTER TABLE notifications MODIFY COLUMN type ENUM('task_assigned', 'task_reminder', 'task_due_soon', 'task_overdue', 'status_changed', 'task_reassigned') NOT NULL");
+        if (DB::getDriverName() === 'mysql') {
+            DB::statement("ALTER TABLE notifications MODIFY COLUMN channel ENUM('web_push', 'whatsapp', 'email') NOT NULL");
+            DB::statement("ALTER TABLE notifications MODIFY COLUMN type ENUM('task_assigned', 'task_reminder', 'task_due_soon', 'task_overdue', 'status_changed', 'task_reassigned') NOT NULL");
+        }
     }
 };

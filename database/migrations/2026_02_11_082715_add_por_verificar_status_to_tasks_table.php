@@ -10,7 +10,10 @@ return new class extends Migration
      */
     public function up(): void
     {
-        DB::statement("ALTER TABLE tasks MODIFY COLUMN status ENUM('Pendiente', 'En Progreso', 'Por Verificar', 'Completada', 'Cancelada') DEFAULT 'Pendiente'");
+        // SQLite no soporta MODIFY COLUMN — solo ejecutar en MySQL/MariaDB
+        if (DB::getDriverName() === 'mysql') {
+            DB::statement("ALTER TABLE tasks MODIFY COLUMN status ENUM('Pendiente', 'En Progreso', 'Por Verificar', 'Completada', 'Cancelada') DEFAULT 'Pendiente'");
+        }
     }
 
     /**
@@ -18,6 +21,8 @@ return new class extends Migration
      */
     public function down(): void
     {
-        DB::statement("ALTER TABLE tasks MODIFY COLUMN status ENUM('Pendiente', 'En Progreso', 'Completada', 'Cancelada') DEFAULT 'Pendiente'");
+        if (DB::getDriverName() === 'mysql') {
+            DB::statement("ALTER TABLE tasks MODIFY COLUMN status ENUM('Pendiente', 'En Progreso', 'Completada', 'Cancelada') DEFAULT 'Pendiente'");
+        }
     }
 };
