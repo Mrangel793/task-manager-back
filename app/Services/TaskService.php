@@ -4,7 +4,9 @@ namespace App\Services;
 
 use App\Events\TaskAssigned;
 use App\Events\TaskCreated;
+use App\Events\TaskDeleted;
 use App\Events\TaskStatusChanged;
+use App\Events\TaskUpdated;
 use App\Models\Task;
 use App\Models\TaskHistory;
 use App\Models\User;
@@ -107,8 +109,7 @@ class TaskService
                     'to_value' => $newValues,
                 ]);
 
-                // TODO: Dispatch TaskUpdated event
-                // event(new TaskUpdated($task, $oldValues));
+                event(new TaskUpdated($task, $user));
             }
 
             DB::commit();
@@ -220,7 +221,7 @@ class TaskService
             ]);
 
             // Dispatch TaskAssigned event
-            event(new TaskAssigned($task, $newAssignee, $user));
+            event(new TaskAssigned($task, $newAssignee, $user, $oldAssigneeId));
 
             DB::commit();
 
@@ -261,8 +262,7 @@ class TaskService
             // Soft delete
             $task->delete();
 
-            // TODO: Dispatch TaskDeleted event
-            // event(new TaskDeleted($task));
+            event(new TaskDeleted($task, $user));
 
             DB::commit();
 

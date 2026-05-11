@@ -30,17 +30,24 @@ class TaskAssigned implements ShouldBroadcast
     public User $assigner;
 
     /**
+     * The previous assignee ID (for reassignment tracking).
+     */
+    public ?string $oldAssigneeId;
+
+    /**
      * Create a new event instance.
      *
      * @param Task $task
      * @param User $assignee
      * @param User $assigner
+     * @param string|null $oldAssigneeId
      */
-    public function __construct(Task $task, User $assignee, User $assigner)
+    public function __construct(Task $task, User $assignee, User $assigner, ?string $oldAssigneeId = null)
     {
         $this->task = $task;
         $this->assignee = $assignee;
         $this->assigner = $assigner;
+        $this->oldAssigneeId = $oldAssigneeId;
     }
 
     /**

@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Api\AuthController;
+use App\Http\Controllers\Api\GoogleCalendarAuthController;
 use App\Http\Controllers\Api\NotificationController;
 use App\Http\Controllers\Api\PushNotificationController;
 use App\Http\Controllers\Api\TaskController;
@@ -99,6 +100,13 @@ Route::prefix('v1')->middleware(['auth:sanctum', 'org.context'])->group(function
     Route::get('tasks/{task}/history', [TaskController::class, 'getHistory'])
         ->middleware('check.task.permissions')
         ->name('api.tasks.history');
+
+    // Google Calendar OAuth routes
+    Route::prefix('google-calendar')->controller(GoogleCalendarAuthController::class)->group(function () {
+        Route::get('connect', 'connect')->name('api.google-calendar.connect');
+        Route::delete('disconnect', 'disconnect')->name('api.google-calendar.disconnect');
+        Route::get('status', 'status')->name('api.google-calendar.status');
+    });
 });
 
 // WhatsApp Command Routes (N8n integration) - NO requiere auth:sanctum, usa n8n.auth

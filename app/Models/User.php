@@ -63,6 +63,9 @@ class User extends Authenticatable
         'is_active',
         'notification_preferences',
         'last_login_at',
+        'google_access_token',
+        'google_refresh_token',
+        'google_token_expires_at',
     ];
 
     /**
@@ -73,6 +76,8 @@ class User extends Authenticatable
     protected $hidden = [
         'password',
         'remember_token',
+        'google_access_token',
+        'google_refresh_token',
     ];
 
     /**
@@ -88,6 +93,7 @@ class User extends Authenticatable
             'whatsapp_verified' => 'boolean',
             'is_active' => 'boolean',
             'notification_preferences' => 'array',
+            'google_token_expires_at' => 'datetime',
         ];
     }
 
