@@ -142,11 +142,21 @@ class GoogleCalendarService
             $end->setDateTime($endDt->toRfc3339String());
             $end->setTimeZone(config('app.timezone', 'America/Bogota'));
         } else {
+            // Sin hora definida: usar la hora de creación de la tarea como referencia
+            $createdTime = $task->created_at
+                ? Carbon::parse($task->created_at)->setTimezone(config('app.timezone', 'America/Bogota'))
+                : Carbon::now(config('app.timezone', 'America/Bogota'));
+
+            $startDt = Carbon::createFromFormat('Y-m-d H:i', "{$task->due_date} " . $createdTime->format('H:i'));
+            $endDt = $startDt->copy()->addHour();
+
             $start = new EventDateTime();
-            $start->setDate($task->due_date);
+            $start->setDateTime($startDt->toRfc3339String());
+            $start->setTimeZone(config('app.timezone', 'America/Bogota'));
 
             $end = new EventDateTime();
-            $end->setDate($task->due_date);
+            $end->setDateTime($endDt->toRfc3339String());
+            $end->setTimeZone(config('app.timezone', 'America/Bogota'));
         }
 
         $event->setStart($start);
