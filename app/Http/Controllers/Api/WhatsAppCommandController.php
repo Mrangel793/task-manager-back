@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Models\Contact;
 use App\Models\Task;
 use App\Models\User;
 use App\Models\WhatsAppMessage;
@@ -818,6 +819,91 @@ class WhatsAppCommandController extends Controller
             return response()->json([
                 'success' => false,
                 'message' => 'Error al crear la tarea. Intenta nuevamente.',
+                'data' => null,
+            ], 500);
+        }
+    }
+
+    /**
+     * Create a new contact from WhatsApp/N8n.
+     * Only Admin users can create contacts.
+     *
+     * @param Request $request
+     * @return JsonResponse
+     */
+    public function createContact(Request $request): JsonResponse
+    {
+        try {
+            $user = $this->resolveUser($request);
+
+            if (!$user) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Usuario no encontrado. Proporcione token o whatsapp_phone válido.',
+                    'data' => null,
+                ], 404);
+            }
+
+            if (!$user->hasRole('Admin') && !$user->hasPermissionTo('manage-contacts')) {
+                return response()->json([
+                    'success' => false,
+                    'message' => '❌ No tienes permisos para crear contactos.',
+                    'data' => null,
+                ], 403);
+            }
+
+            $validator = Validator::make($request->all(), [
+                'name'   => 'required|string|max:255',
+                'phone'  => 'nullable|string|max:50',
+                'email'  => 'nullable|email|max:255',
+                'source' => 'nullable|string|max:255',
+                'notes'  => 'nullable|string',
+            ]);
+
+            if ($validator->fails()) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Error de validación: ' . $validator->errors()->first(),
+                    'data' => null,
+                ], 400);
+            }
+
+            $contact = Contact::create([
+                'name'            => $request->name,
+                'phone'           => $request->phone,
+                'email'           => $request->email,
+                'source'          => $request->source,
+                'notes'           => $request->notes,
+                'organization_id' => $user->organization_id,
+                'created_by'      => $user->id,
+            ]);
+
+            $sourceInfo = $contact->source ? " de *{$contact->source}*" : '';
+            $message = "✅ *Contacto Creado*\n\n"
+                . "*Nombre:* {$contact->name}{$sourceInfo}\n"
+                . ($contact->phone ? "*Teléfono:* {$contact->phone}\n" : '')
+                . ($contact->email ? "*Email:* {$contact->email}\n" : '')
+                . "*ID:* `{$contact->id}`";
+
+            return response()->json([
+                'success' => true,
+                'message' => $message,
+                'data' => [
+                    'contact' => [
+                        'id'     => $contact->id,
+                        'name'   => $contact->name,
+                        'phone'  => $contact->phone,
+                        'email'  => $contact->email,
+                        'source' => $contact->source,
+                    ],
+                ],
+            ], 201);
+        } catch (\Exception $e) {
+            Log::error('Error in createContact: ' . $e->getMessage());
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Error al crear el contacto. Intenta nuevamente.',
                 'data' => null,
             ], 500);
         }

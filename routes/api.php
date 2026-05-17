@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Api\AuthController;
+use App\Http\Controllers\Api\ContactController;
 use App\Http\Controllers\Api\GoogleCalendarAuthController;
 use App\Http\Controllers\Api\NotificationController;
 use App\Http\Controllers\Api\PushNotificationController;
@@ -101,6 +102,18 @@ Route::prefix('v1')->middleware(['auth:sanctum', 'org.context'])->group(function
         ->middleware('check.task.permissions')
         ->name('api.tasks.history');
 
+    // Contacts routes
+    Route::prefix('contacts')->middleware('permission:view-contacts')->controller(ContactController::class)->group(function () {
+        Route::get('/', 'index')->name('api.contacts.index');
+        Route::get('export', 'export')->name('api.contacts.export');
+        Route::get('{id}', 'show')->name('api.contacts.show');
+        Route::post('/', 'store')->middleware('permission:manage-contacts')->name('api.contacts.store');
+        Route::patch('{id}', 'update')->middleware('permission:manage-contacts')->name('api.contacts.update');
+        Route::delete('{id}', 'destroy')->middleware('permission:manage-contacts')->name('api.contacts.destroy');
+        Route::post('grant-access', 'grantAccess')->middleware('role:Admin')->name('api.contacts.grant-access');
+        Route::post('revoke-access', 'revokeAccess')->middleware('role:Admin')->name('api.contacts.revoke-access');
+    });
+
     // Google Calendar OAuth routes
     Route::prefix('google-calendar')->controller(GoogleCalendarAuthController::class)->group(function () {
         Route::get('connect', 'connect')->name('api.google-calendar.connect');
@@ -117,6 +130,7 @@ Route::prefix('v1/whatsapp/commands')->middleware('n8n.auth')->controller(WhatsA
     Route::post('start-task', 'startTask')->name('api.whatsapp.commands.start-task');
     Route::post('complete-task', 'completeTask')->name('api.whatsapp.commands.complete-task');
     Route::post('create-task', 'createTask')->name('api.whatsapp.commands.create-task');
+    Route::post('create-contact', 'createContact')->name('api.whatsapp.commands.create-contact');
 });
 
 // N8n Notification Routes - Para enviar notificaciones de WhatsApp
