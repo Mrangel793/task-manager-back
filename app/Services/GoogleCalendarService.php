@@ -129,7 +129,9 @@ class GoogleCalendarService
         ]);
 
         if ($task->due_time) {
-            $startDt = Carbon::createFromFormat('Y-m-d H:i', "{$task->due_date} {$task->due_time}");
+            // due_time puede ser 'HH:MM' o 'HH:MM:SS' — tomamos solo los primeros 5 caracteres
+            $dueTime = substr($task->due_time, 0, 5);
+            $startDt = Carbon::createFromFormat('Y-m-d H:i', "{$task->due_date} {$dueTime}");
             $endDt = $startDt->copy()->addHour();
 
             $start = new EventDateTime();
