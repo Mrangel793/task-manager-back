@@ -158,7 +158,7 @@ class ContactController extends Controller
             fputs($handle, "\xEF\xBB\xBF");
 
             // Header row
-            fputcsv($handle, ['ID', 'Nombre', 'Teléfono', 'Email', 'Dirección', 'Municipio', 'Notas', 'Creado']);
+            fputcsv($handle, ['ID', 'Nombre', 'Teléfono', 'Email', 'Municipio', 'Notas', 'Creado']);
 
             foreach ($contacts as $contact) {
                 fputcsv($handle, [
@@ -166,7 +166,6 @@ class ContactController extends Controller
                     $contact->name,
                     $contact->phone ?? '',
                     $contact->email ?? '',
-                    $contact->address ?? '',
                     $contact->source ?? '',
                     $contact->notes ?? '',
                     $contact->created_at->format('d/m/Y H:i'),
