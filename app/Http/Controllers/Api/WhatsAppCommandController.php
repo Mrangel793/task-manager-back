@@ -699,16 +699,13 @@ class WhatsAppCommandController extends Controller
                 ], 403);
             }
 
-            // Determine if user is Admin - Admin can create tasks with just title
-            $isAdmin = $creator->hasRole('Admin');
-
-            // Validation rules - due_date and assignee_name are optional for Admin
+            // Validation rules - due_date y assignee_name son opcionales para todos
             $rules = [
-                'title' => 'required|string|max:255',
-                'due_date' => $isAdmin ? 'nullable|date|date_format:Y-m-d' : 'required|date|date_format:Y-m-d',
-                'due_time' => 'nullable|date_format:H:i',
-                'assignee_name' => $isAdmin ? 'nullable|string' : 'required|string',
-                'description' => 'nullable|string',
+                'title'         => 'required|string|max:255',
+                'due_date'      => 'nullable|date|date_format:Y-m-d',
+                'due_time'      => 'nullable|date_format:H:i',
+                'assignee_name' => 'nullable|string',
+                'description'   => 'nullable|string',
             ];
 
             $validator = Validator::make($request->all(), $rules);
@@ -721,21 +718,16 @@ class WhatsAppCommandController extends Controller
                 ], 400);
             }
 
-            // Determine assignee
+            // Determine assignee: buscar por nombre o asignar a sí mismo
             $assignee = null;
 
             if ($request->assignee_name) {
-                // Find assignee by name (fuzzy match)
                 $assigneeName = trim($request->assignee_name);
                 $assignee = User::where('is_active', true)
-                    ->where(function ($query) use ($assigneeName) {
-                        $query->where('name', 'LIKE', "%{$assigneeName}%")
-                            ->orWhere('name', 'LIKE', "%{$assigneeName}%");
-                    })
+                    ->where('name', 'LIKE', "%{$assigneeName}%")
                     ->first();
 
                 if (!$assignee) {
-                    // Try to find by exact words
                     $nameParts = explode(' ', $assigneeName);
                     foreach ($nameParts as $part) {
                         if (strlen($part) >= 3) {
@@ -754,16 +746,13 @@ class WhatsAppCommandController extends Controller
                         'data' => null,
                     ], 404);
                 }
-            } elseif ($isAdmin) {
-                // Admin without assignee_name: assign to self
+            } else {
+                // Sin assignee_name: asignar a quien crea la tarea
                 $assignee = $creator;
             }
 
-            // Determine due_date (default to today + 3 days for Admin if not provided)
-            $dueDate = $request->due_date;
-            if (!$dueDate && $isAdmin) {
-                $dueDate = now()->addDays(3)->format('Y-m-d');
-            }
+            // Determine due_date: usar la proporcionada o por defecto hoy
+            $dueDate = $request->due_date ?? now()->format('Y-m-d');
 
             // Create task using TaskService
             $taskData = [
