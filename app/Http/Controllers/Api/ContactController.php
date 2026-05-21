@@ -7,8 +7,8 @@ use App\Models\Contact;
 use App\Models\User;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use Illuminate\Http\Response;
 use Illuminate\Support\Facades\Validator;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class ContactController extends Controller
 {
@@ -134,7 +134,7 @@ class ContactController extends Controller
         ]);
     }
 
-    public function export(Request $request): Response
+    public function export(Request $request): StreamedResponse
     {
         $query = Contact::orderBy('source')->orderBy('name');
 
@@ -158,7 +158,7 @@ class ContactController extends Controller
             fputs($handle, "\xEF\xBB\xBF");
 
             // Header row
-            fputcsv($handle, ['ID', 'Nombre', 'Teléfono', 'Email', 'Dirección', 'Empresa/Origen', 'Notas', 'Creado']);
+            fputcsv($handle, ['ID', 'Nombre', 'Teléfono', 'Email', 'Dirección', 'Municipio', 'Notas', 'Creado']);
 
             foreach ($contacts as $contact) {
                 fputcsv($handle, [
