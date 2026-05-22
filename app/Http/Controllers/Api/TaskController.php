@@ -47,7 +47,11 @@ class TaskController extends Controller
 
             // Apply RBAC logic
             if ($user->hasRole('Admin')) {
-                // Admin can see all tasks
+                // Admin only sees tasks they created or that are assigned to them
+                $query->where(function ($q) use ($user) {
+                    $q->where('creator_id', $user->id)
+                        ->orWhere('assignee_id', $user->id);
+                });
             } elseif ($user->hasRole('Supervisor')) {
                 // Supervisor can see tasks assigned to them or created by them or assigned to Operadores
                 // Cache Operador IDs for 5 minutes to avoid repeated queries (scoped by organization)
@@ -153,6 +157,18 @@ class TaskController extends Controller
     public function show(Task $task, Request $request): JsonResponse
     {
         try {
+            $user = $request->user();
+
+            // Verify access: Admin and Operador can only see tasks they created or are assigned to
+            if (!$user->hasRole('Supervisor')) {
+                if ($task->creator_id !== $user->id && $task->assignee_id !== $user->id) {
+                    return response()->json([
+                        'success' => false,
+                        'message' => 'No tienes permiso para ver esta tarea.',
+                    ], 403);
+                }
+            }
+
             // Load relationships
             $task->load(['assignee', 'creator']);
 
