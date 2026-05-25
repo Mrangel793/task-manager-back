@@ -4,9 +4,11 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\Contact;
+use App\Models\Notification;
 use App\Models\User;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Validator;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
@@ -76,6 +78,8 @@ class ContactController extends Controller
             'organization_id' => $request->user()->organization_id,
             'created_by'      => $request->user()->id,
         ]);
+
+        $this->notifyContactCreated($contact, $request->user()->name);
 
         return response()->json([
             'success' => true,
@@ -220,5 +224,39 @@ class ContactController extends Controller
             'success' => true,
             'message' => "Acceso a contactos revocado para {$user->name}.",
         ]);
+    }
+
+    private function notifyContactCreated(Contact $contact, string $createdByName): void
+    {
+        try {
+            $users = User::whereNotNull('whatsapp_phone')
+                ->permission('view-contacts')
+                ->get();
+
+            foreach ($users as $user) {
+                Notification::create([
+                    'organization_id' => $contact->organization_id,
+                    'user_id'         => $user->id,
+                    'channel'         => 'whatsapp',
+                    'type'            => 'contact_created',
+                    'title'           => 'Nuevo contacto registrado',
+                    'message'         => "Se registró el contacto {$contact->name}",
+                    'status'          => 'pending',
+                    'data'            => [
+                        'phone'    => $user->whatsapp_phone,
+                        'template' => 'contacto_creado',
+                        'template_params' => [
+                            'user_name'      => $user->name,
+                            'contact_name'   => $contact->name,
+                            'contact_phone'  => $contact->phone ?? 'N/A',
+                            'contact_source' => $contact->source ?? 'N/A',
+                        ],
+                        'contact_id' => $contact->id,
+                    ],
+                ]);
+            }
+        } catch (\Exception $e) {
+            Log::error('Error creating contact notifications: ' . $e->getMessage());
+        }
     }
 }
