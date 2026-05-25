@@ -196,7 +196,15 @@ class ContactController extends Controller
         }
 
         $user = User::findOrFail($request->user_id);
-        $user->givePermissionTo('view-contacts');
+
+        try {
+            $user->givePermissionTo('view-contacts');
+            $has = $user->hasPermissionTo('view-contacts');
+            Log::info('grantAccess', ['user' => $user->id, 'has_after' => $has]);
+        } catch (\Exception $e) {
+            Log::error('grantAccess error', ['error' => $e->getMessage()]);
+            return response()->json(['success' => false, 'message' => $e->getMessage()], 500);
+        }
 
         return response()->json([
             'success' => true,
