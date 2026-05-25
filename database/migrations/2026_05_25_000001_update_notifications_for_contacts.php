@@ -1,60 +1,59 @@
 <?php
 
 use Illuminate\Database\Migrations\Migration;
-use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Schema;
 
 return new class extends Migration
 {
     public function up(): void
     {
-        // 1. Hacer task_id nullable y quitar la foreign key
-        Schema::table('notifications', function (Blueprint $table) {
-            $table->dropForeign(['task_id']);
-            $table->string('task_id', 8)->nullable()->change();
-        });
+        if (DB::getDriverName() !== 'mysql') {
+            return;
+        }
 
-        // 2. Ampliar el enum type para incluir contact_created
-        // Desactivar strict mode temporalmente para evitar warning 1265 en MySQL
         DB::statement("SET SESSION sql_mode=''");
-        DB::statement("ALTER TABLE notifications MODIFY COLUMN type ENUM(
-            'task_assigned',
-            'task_reminder',
-            'task_due_soon',
-            'task_overdue',
-            'status_changed',
-            'task_reassigned',
-            'contact_created'
-        ) NOT NULL");
-        DB::statement("SET SESSION sql_mode='STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION'");
 
-        // 3. Volver a agregar la foreign key como nullable
-        Schema::table('notifications', function (Blueprint $table) {
-            $table->foreign('task_id')->references('id')->on('tasks')->onDelete('cascade');
-        });
+        // Hacer task_id nullable y ampliar el enum type en una sola sentencia
+        DB::statement("ALTER TABLE notifications
+            MODIFY COLUMN task_id varchar(8) NULL,
+            MODIFY COLUMN type ENUM(
+                'task_assigned',
+                'task_created',
+                'task_reminder',
+                'task_due_soon',
+                'task_overdue',
+                'status_changed',
+                'task_status_changed',
+                'task_reassigned',
+                'contact_created'
+            ) NOT NULL
+        ");
+
+        DB::statement("SET SESSION sql_mode='STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION'");
     }
 
     public function down(): void
     {
-        Schema::table('notifications', function (Blueprint $table) {
-            $table->dropForeign(['task_id']);
-            $table->string('task_id', 8)->nullable(false)->change();
-        });
+        if (DB::getDriverName() !== 'mysql') {
+            return;
+        }
 
         DB::statement("SET SESSION sql_mode=''");
-        DB::statement("ALTER TABLE notifications MODIFY COLUMN type ENUM(
-            'task_assigned',
-            'task_reminder',
-            'task_due_soon',
-            'task_overdue',
-            'status_changed',
-            'task_reassigned'
-        ) NOT NULL");
-        DB::statement("SET SESSION sql_mode='STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION'");
 
-        Schema::table('notifications', function (Blueprint $table) {
-            $table->foreign('task_id')->references('id')->on('tasks')->onDelete('cascade');
-        });
+        DB::statement("ALTER TABLE notifications
+            MODIFY COLUMN task_id varchar(8) NOT NULL,
+            MODIFY COLUMN type ENUM(
+                'task_assigned',
+                'task_created',
+                'task_reminder',
+                'task_due_soon',
+                'task_overdue',
+                'status_changed',
+                'task_status_changed',
+                'task_reassigned'
+            ) NOT NULL
+        ");
+
+        DB::statement("SET SESSION sql_mode='STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION'");
     }
 };
