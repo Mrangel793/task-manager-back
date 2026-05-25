@@ -906,7 +906,7 @@ class WhatsAppCommandController extends Controller
         try {
             $users = User::withoutGlobalScopes()
                 ->where('organization_id', $orgId)
-                ->whereNotNull('whatsapp_phone')
+                ->whereNotNull('phone')
                 ->permission('view-contacts')
                 ->get();
 
@@ -920,7 +920,7 @@ class WhatsAppCommandController extends Controller
                     'message'         => "Se registró el contacto {$contact->name}",
                     'status'          => 'pending',
                     'data'            => [
-                        'phone'    => $user->whatsapp_phone,
+                        'phone'    => $user->phone,
                         'template' => 'contacto_creado',
                         'template_params' => [
                             'user_name'      => $user->name,

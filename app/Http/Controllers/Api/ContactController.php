@@ -229,7 +229,7 @@ class ContactController extends Controller
     private function notifyContactCreated(Contact $contact, string $createdByName): void
     {
         try {
-            $users = User::whereNotNull('whatsapp_phone')
+            $users = User::whereNotNull('phone')
                 ->permission('view-contacts')
                 ->get();
 
@@ -243,7 +243,7 @@ class ContactController extends Controller
                     'message'         => "Se registró el contacto {$contact->name}",
                     'status'          => 'pending',
                     'data'            => [
-                        'phone'    => $user->whatsapp_phone,
+                        'phone'    => $user->phone,
                         'template' => 'contacto_creado',
                         'template_params' => [
                             'user_name'      => $user->name,
