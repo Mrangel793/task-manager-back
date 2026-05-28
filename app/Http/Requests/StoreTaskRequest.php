@@ -35,17 +35,15 @@ class StoreTaskRequest extends FormRequest
             $dueDate = $this->input('due_date');
             if (is_string($dueDate) && strlen($dueDate) > 10) {
                 try {
-                    // Parse ISO string and convert to local timezone
                     $dateTime = new \DateTime($dueDate);
                     $dateTime->setTimezone($timezone);
                     $data['due_date'] = $dateTime->format('Y-m-d');
                 } catch (\Exception $e) {
-                    // If parsing fails, try to extract just the date part
                     $data['due_date'] = substr($dueDate, 0, 10);
                 }
             }
-        } elseif ($isAdmin && (!$this->has('due_date') || !$this->input('due_date'))) {
-            // Admin: default to today + 3 days if not provided
+        } elseif (!$this->has('due_date') || !$this->input('due_date')) {
+            // Todos los roles: default a hoy + 3 días si no se envía fecha
             $date = new \DateTime();
             $date->setTimezone($timezone);
             $date->modify('+3 days');
@@ -56,7 +54,6 @@ class StoreTaskRequest extends FormRequest
         if ($this->has('due_time') && $this->input('due_time')) {
             $dueTime = $this->input('due_time');
             if (is_string($dueTime)) {
-                // If it's an ISO datetime string (contains T), extract the time in local timezone
                 if (str_contains($dueTime, 'T')) {
                     try {
                         $dateTime = new \DateTime($dueTime);
@@ -66,14 +63,13 @@ class StoreTaskRequest extends FormRequest
                         // Leave as-is, validation will catch it
                     }
                 } elseif (strlen($dueTime) > 5 && str_contains($dueTime, ':')) {
-                    // If it's HH:MM:SS format, extract HH:MM
                     $data['due_time'] = substr($dueTime, 0, 5);
                 }
             }
         }
 
-        // Admin: default assignee to self if not provided
-        if ($isAdmin && (!$this->has('assignee_id') || !$this->input('assignee_id'))) {
+        // Todos los roles: default assignee a sí mismo si no se envía
+        if (!$this->has('assignee_id') || !$this->input('assignee_id')) {
             $data['assignee_id'] = $user->id;
         }
 
@@ -91,11 +87,10 @@ class StoreTaskRequest extends FormRequest
     public function rules(): array
     {
         $user = $this->user();
-        $isAdmin = $user && $user->hasRole('Admin');
 
-        // Base rules - due_date and assignee_id are optional for Admin
-        $dueDateRequired = $isAdmin ? 'nullable' : 'required';
-        $assigneeRequired = $isAdmin ? 'nullable' : 'required';
+        // Todos los roles: due_date y assignee_id son opcionales — el backend aplica defaults
+        $dueDateRequired = 'nullable';
+        $assigneeRequired = 'nullable';
 
         return [
             'title' => [
