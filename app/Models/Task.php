@@ -178,6 +178,16 @@ class Task extends Model
     }
 
     /**
+     * Get comments for this task.
+     *
+     * @return HasMany
+     */
+    public function comments(): HasMany
+    {
+        return $this->hasMany(TaskComment::class);
+    }
+
+    /**
      * Get history for this task.
      *
      * @return HasMany

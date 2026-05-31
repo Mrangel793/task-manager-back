@@ -5,6 +5,7 @@ use App\Http\Controllers\Api\ContactController;
 use App\Http\Controllers\Api\GoogleCalendarAuthController;
 use App\Http\Controllers\Api\NotificationController;
 use App\Http\Controllers\Api\PushNotificationController;
+use App\Http\Controllers\Api\TaskCommentController;
 use App\Http\Controllers\Api\TaskController;
 use App\Http\Controllers\Api\UserController;
 use App\Http\Controllers\Api\UserTabController;
@@ -101,6 +102,17 @@ Route::prefix('v1')->middleware(['auth:sanctum', 'org.context'])->group(function
     Route::get('tasks/{task}/history', [TaskController::class, 'getHistory'])
         ->middleware('check.task.permissions')
         ->name('api.tasks.history');
+
+    // Task comments (conversational mode)
+    Route::get('tasks/{task}/comments', [TaskCommentController::class, 'index'])
+        ->middleware('check.task.permissions')
+        ->name('api.tasks.comments.index');
+    Route::post('tasks/{task}/comments', [TaskCommentController::class, 'store'])
+        ->middleware('check.task.permissions')
+        ->name('api.tasks.comments.store');
+    Route::delete('tasks/{task}/comments/{comment}', [TaskCommentController::class, 'destroy'])
+        ->middleware('check.task.permissions')
+        ->name('api.tasks.comments.destroy');
 
     // Contacts routes
     Route::prefix('contacts')->middleware('permission:view-contacts')->controller(ContactController::class)->group(function () {
