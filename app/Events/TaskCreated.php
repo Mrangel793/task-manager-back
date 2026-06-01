@@ -43,12 +43,17 @@ class TaskCreated implements ShouldBroadcast
      */
     public function broadcastOn(): array
     {
-        return [
-            // Broadcast to the assignee's private channel
+        $channels = [
             new PrivateChannel('user.' . $this->task->assignee_id),
-            // Broadcast to admin channel
-            new PrivateChannel('admin'),
         ];
+
+        // Only notify the admin channel if creator and assignee are different
+        // (i.e., admin assigned the task to someone else)
+        if ($this->task->creator_id !== $this->task->assignee_id) {
+            $channels[] = new PrivateChannel('user.' . $this->task->creator_id);
+        }
+
+        return $channels;
     }
 
     /**

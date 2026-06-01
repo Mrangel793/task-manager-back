@@ -36,27 +36,24 @@ class SendTaskStatusChangedNotification implements ShouldQueue
 
             Log::info("Processing status change notification for task {$task->id}: {$event->oldStatus} -> {$event->newStatus}");
 
-            // Get all Admin users in the same organization (except the one who made the change)
-            $admins = User::role('Admin')
-                ->where('organization_id', $task->organization_id)
-                ->where('is_active', true)
-                ->where('id', '!=', $changedBy->id)
-                ->get();
-
-            foreach ($admins as $admin) {
-                $this->sendNotificationsToUser($admin, $event);
-            }
-
-            // Also notify the task creator if they're not Admin and not the one who changed
             $creator = $task->creator;
-            if ($creator->id !== $changedBy->id && !$creator->hasRole('Admin')) {
-                $this->sendNotificationsToUser($creator, $event);
+            $assignee = $task->assignee;
+
+            // Collect unique users to notify (excluding who made the change)
+            $toNotify = collect();
+
+            // Always notify the task creator (the one who assigned it), unless they made the change
+            if ($creator && $creator->id !== $changedBy->id) {
+                $toNotify->push($creator);
             }
 
-            // Notify assignee if they didn't make the change
-            $assignee = $task->assignee;
-            if ($assignee && $assignee->id !== $changedBy->id && $assignee->id !== $creator->id) {
-                $this->sendNotificationsToUser($assignee, $event);
+            // Notify assignee if different from creator and didn't make the change
+            if ($assignee && $assignee->id !== $changedBy->id && $assignee->id !== $creator?->id) {
+                $toNotify->push($assignee);
+            }
+
+            foreach ($toNotify->unique('id') as $user) {
+                $this->sendNotificationsToUser($user, $event);
             }
 
             Log::info("Status change notifications processed for task {$task->id}");
