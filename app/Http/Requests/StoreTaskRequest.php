@@ -104,6 +104,11 @@ class StoreTaskRequest extends FormRequest
                 'string',
                 'max:500',
             ],
+            'project_id' => [
+                'nullable',
+                'uuid',
+                'exists:projects,id',
+            ],
             'due_date' => [
                 $dueDateRequired,
                 'regex:/^\d{4}-\d{2}-\d{2}$/',

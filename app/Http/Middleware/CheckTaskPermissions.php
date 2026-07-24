@@ -55,8 +55,8 @@ class CheckTaskPermissions
             ], 403);
         }
 
-        // Operador can only access tasks assigned to them
-        if ($task->assignee_id === $user->id) {
+        // Operador can access tasks assigned to them or created by them
+        if ($task->assignee_id === $user->id || $task->creator_id === $user->id) {
             return $next($request);
         }
 

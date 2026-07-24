@@ -32,6 +32,7 @@ class TaskService
             // Create task
             $task = Task::create([
                 'organization_id' => $creator->organization_id,
+                'project_id' => $data['project_id'] ?? null,
                 'title' => $data['title'],
                 'description' => $data['description'] ?? null,
                 'due_date' => $data['due_date'],
@@ -87,7 +88,7 @@ class TaskService
             $newValues = [];
 
             // Track changes
-            foreach (['title', 'description', 'due_date', 'due_time'] as $field) {
+            foreach (['title', 'description', 'due_date', 'due_time', 'project_id'] as $field) {
                 if (isset($data[$field]) && $task->{$field} != $data[$field]) {
                     $oldValues[$field] = $task->{$field};
                     $newValues[$field] = $data[$field];

@@ -23,6 +23,7 @@ class TaskResource extends JsonResource
             'due_time' => $this->due_time,
             'due_time_formatted' => $this->due_time,
             'is_overdue' => $this->isOverdue(),
+            'project_id' => $this->project_id,
             'assignee_id' => $this->assignee_id,
             'creator_id' => $this->creator_id,
             'created_at' => $this->created_at?->toISOString(),
@@ -31,6 +32,11 @@ class TaskResource extends JsonResource
             'completed_at' => $this->completed_at?->toISOString(),
 
             // Relationships
+            'project' => $this->when($this->relationLoaded('project') && $this->project, fn () => [
+                'id' => $this->project->id,
+                'name' => $this->project->name,
+                'color' => $this->project->color,
+            ]),
             'assignee' => new UserResource($this->whenLoaded('assignee')),
             'creator' => new UserResource($this->whenLoaded('creator')),
 

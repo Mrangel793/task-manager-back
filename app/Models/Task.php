@@ -55,6 +55,7 @@ class Task extends Model
      */
     protected $fillable = [
         'organization_id',
+        'project_id',
         'title',
         'description',
         'status',
@@ -162,6 +163,11 @@ class Task extends Model
      *
      * @return BelongsTo
      */
+    public function project(): BelongsTo
+    {
+        return $this->belongsTo(Project::class);
+    }
+
     public function assignee(): BelongsTo
     {
         return $this->belongsTo(User::class, 'assignee_id');

@@ -110,6 +110,12 @@ class UpdateTaskRequest extends FormRequest
                 'sometimes',
                 'date_format:H:i',
             ],
+            'project_id' => [
+                'sometimes',
+                'nullable',
+                'uuid',
+                'exists:projects,id',
+            ],
             'status' => [
                 'sometimes',
                 'string',

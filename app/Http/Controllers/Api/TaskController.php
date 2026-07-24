@@ -43,7 +43,7 @@ class TaskController extends Controller
         try {
             $user = $request->user();
 
-            $query = Task::with(['assignee', 'creator']);
+            $query = Task::with(['assignee', 'creator', 'project']);
 
             // Apply RBAC logic
             if ($user->hasRole('Admin')) {
@@ -66,8 +66,11 @@ class TaskController extends Controller
                         ->orWhereIn('assignee_id', $operadorIds);
                 });
             } else {
-                // Operador can only see tasks assigned to them
-                $query->where('assignee_id', $user->id);
+                // Operador sees tasks assigned to them OR created by them
+                $query->where(function ($q) use ($user) {
+                    $q->where('assignee_id', $user->id)
+                        ->orWhere('creator_id', $user->id);
+                });
             }
 
             // Apply filters
@@ -77,6 +80,14 @@ class TaskController extends Controller
 
             if ($request->has('creator_id')) {
                 $query->where('creator_id', $request->creator_id);
+            }
+
+            if ($request->has('project_id')) {
+                if ($request->project_id === 'none') {
+                    $query->whereNull('project_id');
+                } else {
+                    $query->where('project_id', $request->project_id);
+                }
             }
 
             if ($request->has('status')) {
@@ -105,8 +116,8 @@ class TaskController extends Controller
             $sortOrder = $request->get('sort_order', 'desc');
             $query->orderBy($sortBy, $sortOrder);
 
-            // Pagination
-            $perPage = $request->get('per_page', 15);
+            // Pagination — máximo 500 para evitar abuso, default 200
+            $perPage = min((int) $request->get('per_page', 200), 500);
             $tasks = $query->paginate($perPage);
 
             return TaskResource::collection($tasks);
@@ -170,7 +181,7 @@ class TaskController extends Controller
             }
 
             // Load relationships
-            $task->load(['assignee', 'creator']);
+            $task->load(['assignee', 'creator', 'project']);
 
             // Load history if requested
             if ($request->boolean('include_history')) {

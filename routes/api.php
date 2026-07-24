@@ -4,6 +4,7 @@ use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\ContactController;
 use App\Http\Controllers\Api\GoogleCalendarAuthController;
 use App\Http\Controllers\Api\NotificationController;
+use App\Http\Controllers\Api\ProjectController;
 use App\Http\Controllers\Api\PushNotificationController;
 use App\Http\Controllers\Api\TaskCommentController;
 use App\Http\Controllers\Api\TaskController;
@@ -80,6 +81,17 @@ Route::prefix('v1')->middleware(['auth:sanctum', 'org.context'])->group(function
         Route::patch('{id}', 'update')->name('api.tabs.update');
         Route::delete('{id}', 'destroy')->name('api.tabs.destroy');
         Route::post('reorder', 'reorder')->name('api.tabs.reorder');
+    });
+
+    // Projects routes
+    Route::prefix('projects')->controller(ProjectController::class)->group(function () {
+        Route::get('/', 'index')->name('api.projects.index');
+        Route::get('summary', 'summary')->name('api.projects.summary');
+        Route::post('/', 'store')->name('api.projects.store');
+        Route::get('{project}', 'show')->name('api.projects.show');
+        Route::match(['patch', 'put'], '{project}', 'update')->name('api.projects.update');
+        Route::delete('{project}', 'destroy')->name('api.projects.destroy');
+        Route::get('{project}/tasks', 'tasks')->name('api.projects.tasks');
     });
 
     // Tasks CRUD routes
