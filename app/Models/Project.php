@@ -8,6 +8,7 @@ use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
@@ -23,6 +24,7 @@ class Project extends Model
         'color',
         'due_date',
         'created_by',
+        'visibility',
     ];
 
     protected function casts(): array
@@ -42,6 +44,33 @@ class Project extends Model
     public function tasks(): HasMany
     {
         return $this->hasMany(Task::class);
+    }
+
+    public function members(): BelongsToMany
+    {
+        return $this->belongsToMany(User::class, 'project_members')
+            ->withPivot('added_at')
+            ->withTimestamps(updated: false);
+    }
+
+    public function isVisibleTo(User $user): bool
+    {
+        if ($this->visibility === 'todos') {
+            return true;
+        }
+
+        // creator always has access
+        if ((string) $this->created_by === (string) $user->id) {
+            return true;
+        }
+
+        return $this->members()->where('user_id', $user->id)->exists();
+    }
+
+    public function canManageMembers(User $user): bool
+    {
+        return (string) $this->created_by === (string) $user->id
+            || $user->hasRole('Admin');
     }
 
     // -- Progress --
@@ -108,5 +137,14 @@ class Project extends Model
     public function scopeArchived(Builder $query): Builder
     {
         return $query->where('status', 'Archivado');
+    }
+
+    public function scopeVisibleTo(Builder $query, User $user): Builder
+    {
+        return $query->where(function (Builder $q) use ($user) {
+            $q->where('visibility', 'todos')
+              ->orWhere('created_by', $user->id)
+              ->orWhereHas('members', fn (Builder $m) => $m->where('user_id', $user->id));
+        });
     }
 }

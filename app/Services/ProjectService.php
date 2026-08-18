@@ -22,6 +22,7 @@ class ProjectService
                 'color' => $data['color'] ?? '#3B82F6',
                 'due_date' => $data['due_date'] ?? null,
                 'created_by' => $creator->id,
+                'visibility' => $data['visibility'] ?? 'todos',
             ]);
 
             DB::commit();
@@ -39,12 +40,15 @@ class ProjectService
         try {
             DB::beginTransaction();
 
-            $project->update(array_filter([
+            $updateData = array_filter([
                 'name' => $data['name'] ?? null,
                 'description' => array_key_exists('description', $data) ? $data['description'] : null,
                 'color' => $data['color'] ?? null,
                 'due_date' => array_key_exists('due_date', $data) ? $data['due_date'] : null,
-            ], fn ($v) => $v !== null));
+                'visibility' => $data['visibility'] ?? null,
+            ], fn ($v) => $v !== null);
+
+            $project->update($updateData);
 
             DB::commit();
 

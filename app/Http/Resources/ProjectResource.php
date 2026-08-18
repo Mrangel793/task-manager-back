@@ -18,6 +18,7 @@ class ProjectResource extends JsonResource
             'status' => $this->status,
             'color' => $this->color,
             'due_date' => $this->due_date?->format('Y-m-d'),
+            'visibility' => $this->visibility,
             'health' => $this->health,
             'created_at' => $this->created_at?->toISOString(),
             'updated_at' => $this->updated_at?->toISOString(),
@@ -27,6 +28,7 @@ class ProjectResource extends JsonResource
 
             // Relationships
             'creator' => new UserResource($this->whenLoaded('creator')),
+            'members' => UserResource::collection($this->whenLoaded('members')),
 
             // Tasks (only when explicitly loaded)
             'tasks' => TaskResource::collection($this->whenLoaded('tasks')),

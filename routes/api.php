@@ -93,6 +93,10 @@ Route::prefix('v1')->middleware(['auth:sanctum', 'org.context'])->group(function
         Route::match(['patch', 'put'], '{project}', 'update')->name('api.projects.update');
         Route::delete('{project}', 'destroy')->name('api.projects.destroy');
         Route::get('{project}/tasks', 'tasks')->name('api.projects.tasks');
+        // Member management
+        Route::get('{project}/members', 'listMembers')->name('api.projects.members.index');
+        Route::post('{project}/members', 'addMember')->name('api.projects.members.store');
+        Route::delete('{project}/members/{user}', 'removeMember')->name('api.projects.members.destroy');
     });
 
     // Tasks CRUD routes

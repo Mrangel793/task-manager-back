@@ -5,7 +5,9 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Http\Resources\ProjectResource;
 use App\Http\Resources\TaskResource;
+use App\Http\Resources\UserResource;
 use App\Models\Project;
+use App\Models\User;
 use App\Services\ProjectService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -19,7 +21,8 @@ class ProjectController extends Controller
 
     public function index(Request $request): JsonResponse
     {
-        $query = Project::with('creator');
+        $user = $request->user();
+        $query = Project::with('creator')->visibleTo($user);
 
         // Filters
         if ($request->filled('status')) {
@@ -64,6 +67,7 @@ class ProjectController extends Controller
             'description' => 'nullable|string|max:1000',
             'color' => ['nullable', 'string', 'regex:/^#[0-9A-Fa-f]{6}$/'],
             'due_date' => 'nullable|date_format:Y-m-d|after_or_equal:today',
+            'visibility' => ['nullable', Rule::in(['todos', 'miembros'])],
         ]);
 
         $project = $this->projectService->createProject($validated, $request->user());
@@ -75,9 +79,13 @@ class ProjectController extends Controller
         ], 201);
     }
 
-    public function show(Project $project): JsonResponse
+    public function show(Request $request, Project $project): JsonResponse
     {
-        $project->load('creator');
+        if (! $project->isVisibleTo($request->user())) {
+            return response()->json(['success' => false, 'message' => 'No tienes acceso a este proyecto.'], 403);
+        }
+
+        $project->load('creator', 'members');
 
         return response()->json([
             'success' => true,
@@ -87,12 +95,17 @@ class ProjectController extends Controller
 
     public function update(Request $request, Project $project): JsonResponse
     {
+        if (! $project->isVisibleTo($request->user())) {
+            return response()->json(['success' => false, 'message' => 'No tienes acceso a este proyecto.'], 403);
+        }
+
         $validated = $request->validate([
             'name' => 'sometimes|string|min:3|max:100',
             'description' => 'sometimes|nullable|string|max:1000',
             'color' => ['sometimes', 'string', 'regex:/^#[0-9A-Fa-f]{6}$/'],
             'due_date' => 'sometimes|nullable|date_format:Y-m-d',
             'status' => ['sometimes', Rule::in(['Activo', 'Pausado', 'Completado', 'Archivado'])],
+            'visibility' => ['sometimes', Rule::in(['todos', 'miembros'])],
         ]);
 
         if (isset($validated['status'])) {
@@ -111,8 +124,12 @@ class ProjectController extends Controller
         ]);
     }
 
-    public function destroy(Project $project): JsonResponse
+    public function destroy(Request $request, Project $project): JsonResponse
     {
+        if (! $project->isVisibleTo($request->user())) {
+            return response()->json(['success' => false, 'message' => 'No tienes acceso a este proyecto.'], 403);
+        }
+
         $this->projectService->deleteProject($project);
 
         return response()->json([
@@ -123,6 +140,10 @@ class ProjectController extends Controller
 
     public function tasks(Request $request, Project $project): JsonResponse
     {
+        if (! $project->isVisibleTo($request->user())) {
+            return response()->json(['success' => false, 'message' => 'No tienes acceso a este proyecto.'], 403);
+        }
+
         $query = $project->tasks()->with(['assignee', 'creator']);
 
         if ($request->filled('status')) {
@@ -144,9 +165,9 @@ class ProjectController extends Controller
         ]);
     }
 
-    public function summary(): JsonResponse
+    public function summary(Request $request): JsonResponse
     {
-        $projects = Project::all();
+        $projects = Project::visibleTo($request->user())->get();
 
         $summary = [
             'total' => $projects->count(),
@@ -160,6 +181,61 @@ class ProjectController extends Controller
         return response()->json([
             'success' => true,
             'data' => $summary,
+        ]);
+    }
+
+    // -- Member management --
+
+    public function listMembers(Request $request, Project $project): JsonResponse
+    {
+        if (! $project->isVisibleTo($request->user())) {
+            return response()->json(['success' => false, 'message' => 'No tienes acceso a este proyecto.'], 403);
+        }
+
+        $members = $project->members()->get();
+
+        return response()->json([
+            'success' => true,
+            'data' => UserResource::collection($members),
+        ]);
+    }
+
+    public function addMember(Request $request, Project $project): JsonResponse
+    {
+        if (! $project->canManageMembers($request->user())) {
+            return response()->json(['success' => false, 'message' => 'Solo el creador del proyecto o un Admin puede gestionar miembros.'], 403);
+        }
+
+        $validated = $request->validate([
+            'user_id' => 'required|uuid|exists:users,id',
+        ]);
+
+        $user = User::findOrFail($validated['user_id']);
+
+        // Creator doesn't need to be a member — they always have access
+        if ((string) $user->id === (string) $project->created_by) {
+            return response()->json(['success' => false, 'message' => 'El creador del proyecto siempre tiene acceso.'], 422);
+        }
+
+        $project->members()->syncWithoutDetaching([$user->id => ['added_at' => now()]]);
+
+        return response()->json([
+            'success' => true,
+            'message' => "{$user->name} agregado al proyecto.",
+        ]);
+    }
+
+    public function removeMember(Request $request, Project $project, User $user): JsonResponse
+    {
+        if (! $project->canManageMembers($request->user())) {
+            return response()->json(['success' => false, 'message' => 'Solo el creador del proyecto o un Admin puede gestionar miembros.'], 403);
+        }
+
+        $project->members()->detach($user->id);
+
+        return response()->json([
+            'success' => true,
+            'message' => "{$user->name} removido del proyecto.",
         ]);
     }
 }
