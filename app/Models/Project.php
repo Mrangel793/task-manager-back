@@ -49,8 +49,7 @@ class Project extends Model
     public function members(): BelongsToMany
     {
         return $this->belongsToMany(User::class, 'project_members')
-            ->withPivot('added_at')
-            ->withTimestamps(updated: false);
+            ->withPivot('added_at');
     }
 
     public function isVisibleTo(User $user): bool
