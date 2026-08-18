@@ -80,7 +80,7 @@ class UpdateTaskRequest extends FormRequest
                 'sometimes',
                 'string',
                 'min:3',
-                'max:100',
+                'max:500',
             ],
             'description' => [
                 'sometimes',

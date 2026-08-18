@@ -97,7 +97,7 @@ class StoreTaskRequest extends FormRequest
                 'required',
                 'string',
                 'min:3',
-                'max:100',
+                'max:500',
             ],
             'description' => [
                 'nullable',
