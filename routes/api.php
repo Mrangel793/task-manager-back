@@ -29,9 +29,10 @@ Route::prefix('v1')->group(function () {
     Route::prefix('auth')->controller(AuthController::class)->group(function () {
         Route::post('register', 'register')->name('api.auth.register');
         Route::post('verify', 'verify')->name('api.auth.verify');
-        Route::post('login', 'login')->name('api.auth.login');
-        Route::post('forgot-password', 'forgotPassword')->name('api.auth.forgot-password');
-        Route::post('reset-password', 'resetPassword')->name('api.auth.reset-password');
+        // Máximo 5 intentos por minuto por IP para prevenir fuerza bruta
+        Route::post('login', 'login')->middleware('throttle:5,1')->name('api.auth.login');
+        Route::post('forgot-password', 'forgotPassword')->middleware('throttle:3,1')->name('api.auth.forgot-password');
+        Route::post('reset-password', 'resetPassword')->middleware('throttle:5,1')->name('api.auth.reset-password');
     });
 });
 

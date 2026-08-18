@@ -23,3 +23,9 @@ Homestead.json
 Homestead.yaml
 Thumbs.db
 CLAUDE.md
+
+# Playwright
+/playwright-report/
+/test-results/
+/playwright/.cache/
+playwright.config.*
