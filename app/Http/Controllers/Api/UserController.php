@@ -6,13 +6,16 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\StoreUserRequest;
 use App\Http\Requests\UpdateUserRequest;
 use App\Http\Resources\UserResource;
+use App\Models\Notification;
 use App\Models\User;
 use App\Notifications\WelcomeUserNotification;
+use App\Services\N8nWebhookService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Str;
 
 class UserController extends Controller
 {
@@ -98,8 +101,11 @@ class UserController extends Controller
     public function store(StoreUserRequest $request): JsonResponse
     {
         try {
-            // Store plain password before hashing (for email notification)
-            $plainPassword = $request->password;
+            // Generate password if not provided
+            $plainPassword = $request->password ?? Str::random(10);
+
+            // Use phone as whatsapp_phone if not provided separately
+            $whatsappPhone = $request->whatsapp_phone ?? $request->phone;
 
             // Create user (organization_id auto-set by BelongsToOrganization trait)
             $user = User::create([
@@ -110,7 +116,7 @@ class UserController extends Controller
                 'password' => $plainPassword,
                 'role' => $request->role,
                 'is_active' => $request->get('is_active', true),
-                'whatsapp_phone' => $request->whatsapp_phone,
+                'whatsapp_phone' => $whatsappPhone,
                 'notification_preferences' => $request->notification_preferences
                     ? json_decode($request->notification_preferences, true)
                     : null,
@@ -122,14 +128,19 @@ class UserController extends Controller
             // Invalidate operador IDs cache when creating new users
             Cache::forget('operador_user_ids_' . $request->user()->organization_id);
 
-            // Send welcome email with credentials
+            // Send welcome email with credentials (if email provided)
             if ($user->email) {
                 $user->notify(new WelcomeUserNotification($plainPassword, $request->user()));
             }
 
+            // Send credentials via WhatsApp (N8n pending notification)
+            $this->sendWelcomeWhatsApp($user, $plainPassword, $request->user());
+
+            $channel = $user->email ? 'correo y WhatsApp' : 'WhatsApp';
+
             return response()->json([
                 'success' => true,
-                'message' => 'Usuario creado exitosamente. Se han enviado las credenciales por correo.',
+                'message' => "Usuario creado exitosamente. Se han enviado las credenciales por {$channel}.",
                 'data' => new UserResource($user),
             ], 201);
         } catch (\Exception $e) {
@@ -317,6 +328,43 @@ class UserController extends Controller
                 'message' => 'Error al eliminar el usuario.',
                 'errors' => ['server' => ['Ocurrió un error inesperado. Por favor, inténtelo de nuevo.']],
             ], 500);
+        }
+    }
+
+    private function sendWelcomeWhatsApp(User $user, string $password, User $createdBy): void
+    {
+        try {
+            $phone = $user->whatsapp_phone ?? $user->phone;
+            if (! $phone) {
+                return;
+            }
+
+            $orgName = $createdBy->organization?->name ?? 'TaskManager';
+            $loginUrl = config('app.frontend_url', 'https://task.nativoweb.com');
+
+            $message = "Hola {$user->name}, tu cuenta en *{$orgName}* ha sido creada.\n\n"
+                . "Tus credenciales:\n"
+                . "Teléfono: {$phone}\n"
+                . "Contraseña: {$password}\n\n"
+                . "Ingresa aquí: {$loginUrl}\n\n"
+                . "Te recomendamos cambiar tu contraseña después de iniciar sesión.";
+
+            Notification::create([
+                'organization_id' => $user->organization_id,
+                'user_id' => $user->id,
+                'task_id' => null,
+                'channel' => 'whatsapp',
+                'type' => 'user_welcome',
+                'title' => 'Bienvenido a ' . $orgName,
+                'message' => $message,
+                'data' => [
+                    'phone' => $phone,
+                    'template' => 'user_welcome',
+                ],
+                'status' => 'pending',
+            ]);
+        } catch (\Exception $e) {
+            Log::error('Error al crear notificación WhatsApp de bienvenida: ' . $e->getMessage());
         }
     }
 }

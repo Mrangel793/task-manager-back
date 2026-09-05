@@ -25,14 +25,14 @@ class StoreUserRequest extends FormRequest
     {
         return [
             'email' => [
-                'required',
+                'nullable',
                 'string',
                 'email',
                 'max:255',
                 'unique:users,email',
             ],
             'phone' => [
-                'nullable',
+                'required',
                 'string',
                 'unique:users,phone',
                 'regex:/^\+[1-9]\d{1,14}$/', // E.164 format
@@ -45,7 +45,7 @@ class StoreUserRequest extends FormRequest
                 'regex:/^[a-zA-ZáéíóúÁÉÍÓÚñÑ\s]+$/', // Solo letras y espacios
             ],
             'password' => [
-                'required',
+                'nullable',
                 'string',
                 'min:8',
                 'regex:/^(?=.*[A-Z])(?=.*\d).+$/', // Al menos 1 mayúscula y 1 número
@@ -80,11 +80,11 @@ class StoreUserRequest extends FormRequest
     public function messages(): array
     {
         return [
-            'email.required' => 'El correo electrónico es obligatorio.',
             'email.email' => 'El correo electrónico debe ser una dirección válida.',
             'email.unique' => 'Este correo electrónico ya está registrado.',
             'email.max' => 'El correo electrónico no puede exceder :max caracteres.',
 
+            'phone.required' => 'El número de teléfono es obligatorio.',
             'phone.unique' => 'Este número de teléfono ya está registrado.',
             'phone.regex' => 'El formato del número de teléfono debe ser E.164 (ejemplo: +573001234567).',
 
@@ -93,7 +93,6 @@ class StoreUserRequest extends FormRequest
             'name.max' => 'El nombre no puede exceder :max caracteres.',
             'name.regex' => 'El nombre solo puede contener letras y espacios.',
 
-            'password.required' => 'La contraseña es obligatoria.',
             'password.min' => 'La contraseña debe tener al menos :min caracteres.',
             'password.regex' => 'La contraseña debe contener al menos una letra mayúscula y un número.',
 
