@@ -133,8 +133,8 @@ class UserController extends Controller
                 $user->notify(new WelcomeUserNotification($plainPassword, $request->user()));
             }
 
-            // Send credentials via WhatsApp (N8n pending notification)
-            $this->sendWelcomeWhatsApp($user, $plainPassword, $request->user());
+            // Send activation link via WhatsApp (N8n pending notification)
+            $this->sendWelcomeWhatsApp($user, $request->user());
 
             $channel = $user->email ? 'correo y WhatsApp' : 'WhatsApp';
 
@@ -331,7 +331,12 @@ class UserController extends Controller
         }
     }
 
-    private function sendWelcomeWhatsApp(User $user, string $password, User $createdBy): void
+    /**
+     * Crea la notificación de bienvenida por WhatsApp con un enlace de activación
+     * de un solo uso. No se envían credenciales: Meta no aprueba plantillas que
+     * contengan contraseñas.
+     */
+    private function sendWelcomeWhatsApp(User $user, User $createdBy): void
     {
         try {
             $phone = $user->whatsapp_phone ?? $user->phone;
@@ -342,12 +347,19 @@ class UserController extends Controller
             $orgName = $createdBy->organization?->name ?? 'TaskManager';
             $loginUrl = config('app.frontend_url', 'https://task.nativoweb.com');
 
+            $plainToken = Str::random(64);
+
+            $user->forceFill([
+                'activation_token' => hash('sha256', $plainToken),
+                'activation_token_expires_at' => now()->addHours(48),
+            ])->save();
+
+            $activationUrl = rtrim($loginUrl, '/') . '/activar/' . $plainToken;
+
             $message = "Hola {$user->name}, tu cuenta en *{$orgName}* ha sido creada.\n\n"
-                . "Tus credenciales:\n"
-                . "Teléfono: {$phone}\n"
-                . "Contraseña: {$password}\n\n"
-                . "Ingresa aquí: {$loginUrl}\n\n"
-                . "Te recomendamos cambiar tu contraseña después de iniciar sesión.";
+                . "Para activarla y crear tu contraseña, ingresa aquí:\n"
+                . "{$activationUrl}\n\n"
+                . 'El enlace es de un solo uso y vence en 48 horas.';
 
             Notification::create([
                 'organization_id' => $user->organization_id,
@@ -360,6 +372,11 @@ class UserController extends Controller
                 'data' => [
                     'phone' => $phone,
                     'template' => 'user_welcome',
+                    'template_params' => [
+                        'user_name' => $user->name,
+                        'org_name' => $orgName,
+                        'activation_token' => $plainToken,
+                    ],
                 ],
                 'status' => 'pending',
             ]);

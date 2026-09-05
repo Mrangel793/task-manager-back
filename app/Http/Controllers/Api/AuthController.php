@@ -213,15 +213,32 @@ class AuthController extends Controller
     public function login(LoginRequest $request): JsonResponse
     {
         try {
-            // Find user by email (withoutGlobalScopes since user is not authenticated yet)
-            $user = User::withoutGlobalScopes()->where('email', $request->email)->first();
+            // Find user by email or phone (withoutGlobalScopes since user is not authenticated yet)
+            $credential = $request->credential;
+            $isPhone = str_starts_with($credential, '+') || preg_match('/^\d{7,}$/', $credential);
+
+            $user = User::withoutGlobalScopes()
+                ->where(function ($query) use ($credential, $isPhone) {
+                    if ($isPhone) {
+                        // Normalize: if just digits starting with 3, assume Colombian +57
+                        $phone = $credential;
+                        if (preg_match('/^3\d{9}$/', $credential)) {
+                            $phone = '+57' . $credential;
+                        }
+                        $query->where('phone', $phone)
+                              ->orWhere('whatsapp_phone', $phone);
+                    } else {
+                        $query->where('email', $credential);
+                    }
+                })
+                ->first();
 
             // Validate credentials
             if (!$user || !Hash::check($request->password, $user->password)) {
                 return response()->json([
                     'success' => false,
                     'message' => 'Credenciales inválidas.',
-                    'errors' => ['credentials' => ['El correo electrónico o la contraseña son incorrectos.']],
+                    'errors' => ['credentials' => ['El correo electrónico, teléfono o la contraseña son incorrectos.']],
                 ], 401);
             }
 
@@ -620,5 +637,117 @@ class AuthController extends Controller
                 'errors'  => ['server' => ['Ocurrió un error inesperado. Por favor, inténtelo de nuevo.']],
             ], 500);
         }
+    }
+
+    /**
+     * Verificar un enlace de activación antes de mostrar el formulario.
+     *
+     * No usa Password::createToken porque el email es opcional en este proyecto:
+     * el token vive en la propia tabla users.
+     */
+    public function verifyActivationToken(Request $request): JsonResponse
+    {
+        $request->validate([
+            'token' => 'required|string',
+        ], [
+            'token.required' => 'El token es obligatorio.',
+        ]);
+
+        try {
+            $user = $this->findUserByActivationToken($request->input('token'));
+
+            if (! $user) {
+                return $this->invalidActivationTokenResponse();
+            }
+
+            return response()->json([
+                'success' => true,
+                'data' => [
+                    'name' => $user->name,
+                    'organization_name' => $user->organization?->name,
+                ],
+            ]);
+        } catch (\Exception $e) {
+            Log::error('Error en activate/verify: ' . $e->getMessage());
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Error al verificar el enlace de activación.',
+                'errors'  => ['server' => ['Ocurrió un error inesperado. Por favor, inténtelo de nuevo.']],
+            ], 500);
+        }
+    }
+
+    /**
+     * Activar la cuenta estableciendo la contraseña definitiva.
+     *
+     * El token es de un solo uso: se limpia al activar.
+     */
+    public function activateAccount(Request $request): JsonResponse
+    {
+        $request->validate([
+            'token'    => 'required|string',
+            'password' => 'required|string|min:8|confirmed',
+        ], [
+            'token.required'     => 'El token es obligatorio.',
+            'password.required'  => 'La contraseña es obligatoria.',
+            'password.min'       => 'La contraseña debe tener al menos 8 caracteres.',
+            'password.confirmed' => 'La confirmación de la contraseña no coincide.',
+        ]);
+
+        try {
+            $user = $this->findUserByActivationToken($request->input('token'));
+
+            if (! $user) {
+                return $this->invalidActivationTokenResponse();
+            }
+
+            $user->forceFill([
+                'password' => $request->input('password'),
+                'activation_token' => null,
+                'activation_token_expires_at' => null,
+                'is_active' => true,
+                'whatsapp_verified' => true,
+            ])->save();
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Tu cuenta ha sido activada. Ya puedes iniciar sesión.',
+            ]);
+        } catch (\Exception $e) {
+            Log::error('Error en activate: ' . $e->getMessage());
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Error al activar la cuenta.',
+                'errors'  => ['server' => ['Ocurrió un error inesperado. Por favor, inténtelo de nuevo.']],
+            ], 500);
+        }
+    }
+
+    /**
+     * Resolver el usuario dueño de un token de activación vigente.
+     */
+    private function findUserByActivationToken(string $plainToken): ?User
+    {
+        return User::withoutGlobalScopes()
+            ->whereNull('deleted_at')
+            ->where('activation_token', hash('sha256', $plainToken))
+            ->where('activation_token_expires_at', '>', now())
+            ->first();
+    }
+
+    /**
+     * Respuesta única para token inexistente, ya usado o expirado.
+     */
+    private function invalidActivationTokenResponse(): JsonResponse
+    {
+        $message = 'El enlace de activación es inválido o ha expirado.';
+
+        return response()->json([
+            'success' => false,
+            'message' => $message,
+            'errors'  => ['token' => [$message]],
+        ], 422);
     }
 }

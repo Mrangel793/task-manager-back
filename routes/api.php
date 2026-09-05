@@ -33,6 +33,9 @@ Route::prefix('v1')->group(function () {
         Route::post('login', 'login')->middleware('throttle:5,1')->name('api.auth.login');
         Route::post('forgot-password', 'forgotPassword')->middleware('throttle:3,1')->name('api.auth.forgot-password');
         Route::post('reset-password', 'resetPassword')->middleware('throttle:5,1')->name('api.auth.reset-password');
+        // Activación de cuenta por enlace de un solo uso (enviado por WhatsApp)
+        Route::post('activate/verify', 'verifyActivationToken')->middleware('throttle:10,1')->name('api.auth.activate.verify');
+        Route::post('activate', 'activateAccount')->middleware('throttle:5,1')->name('api.auth.activate');
     });
 });
 

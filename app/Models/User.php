@@ -27,6 +27,8 @@ use Spatie\Permission\Traits\HasRoles;
  * @property bool $whatsapp_verified
  * @property bool $is_active
  * @property array|null $notification_preferences
+ * @property string|null $activation_token
+ * @property \Illuminate\Support\Carbon|null $activation_token_expires_at
  * @property \Illuminate\Support\Carbon|null $email_verified_at
  * @property \Illuminate\Support\Carbon|null $last_login_at
  * @property \Illuminate\Support\Carbon|null $created_at
@@ -66,6 +68,8 @@ class User extends Authenticatable
         'google_access_token',
         'google_refresh_token',
         'google_token_expires_at',
+        'activation_token',
+        'activation_token_expires_at',
     ];
 
     /**
@@ -78,6 +82,7 @@ class User extends Authenticatable
         'remember_token',
         'google_access_token',
         'google_refresh_token',
+        'activation_token',
     ];
 
     /**
@@ -94,6 +99,7 @@ class User extends Authenticatable
             'is_active' => 'boolean',
             'notification_preferences' => 'array',
             'google_token_expires_at' => 'datetime',
+            'activation_token_expires_at' => 'datetime',
         ];
     }
 
