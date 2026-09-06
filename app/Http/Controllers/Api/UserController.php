@@ -310,12 +310,11 @@ class UserController extends Controller
                 ], 422);
             }
 
-            // Free unique fields before soft-deleting so they can be reused
-            $suffix = '_del_' . substr($user->id, 0, 8);
+            // Nullify unique fields before soft-deleting so they can be reused
             $user->forceFill([
-                'email' => $user->email ? $user->email . $suffix : null,
-                'phone' => $user->phone ? $user->phone . $suffix : null,
-                'whatsapp_phone' => $user->whatsapp_phone ? $user->whatsapp_phone . $suffix : null,
+                'email' => null,
+                'phone' => null,
+                'whatsapp_phone' => null,
             ])->saveQuietly();
 
             // Soft delete
@@ -333,7 +332,8 @@ class UserController extends Controller
 
             return response()->json([
                 'success' => false,
-                'message' => 'Error al eliminar el usuario: ' . $e->getMessage(),
+                'message' => 'Error al eliminar el usuario.',
+                'errors' => ['server' => ['Ocurrió un error inesperado. Por favor, inténtelo de nuevo.']],
             ], 500);
         }
     }
