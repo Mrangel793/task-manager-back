@@ -333,8 +333,7 @@ class UserController extends Controller
 
             return response()->json([
                 'success' => false,
-                'message' => 'Error al eliminar el usuario.',
-                'errors' => ['server' => ['Ocurrió un error inesperado. Por favor, inténtelo de nuevo.']],
+                'message' => 'Error al eliminar el usuario: ' . $e->getMessage(),
             ], 500);
         }
     }
