@@ -29,12 +29,12 @@ class StoreUserRequest extends FormRequest
                 'string',
                 'email',
                 'max:255',
-                'unique:users,email',
+                Rule::unique('users', 'email')->whereNull('deleted_at'),
             ],
             'phone' => [
                 'required',
                 'string',
-                'unique:users,phone',
+                Rule::unique('users', 'phone')->whereNull('deleted_at'),
                 'regex:/^\+[1-9]\d{1,14}$/', // E.164 format
             ],
             'name' => [
@@ -62,7 +62,7 @@ class StoreUserRequest extends FormRequest
             'whatsapp_phone' => [
                 'nullable',
                 'string',
-                'unique:users,whatsapp_phone',
+                Rule::unique('users', 'whatsapp_phone')->whereNull('deleted_at'),
                 'regex:/^\+[1-9]\d{1,14}$/', // E.164 format
             ],
             'notification_preferences' => [
