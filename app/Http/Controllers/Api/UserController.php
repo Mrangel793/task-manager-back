@@ -311,12 +311,12 @@ class UserController extends Controller
             }
 
             // Free unique fields before soft-deleting so they can be reused
-            $suffix = '_deleted_' . $user->id;
-            $user->update([
+            $suffix = '_del_' . substr($user->id, 0, 8);
+            $user->forceFill([
                 'email' => $user->email ? $user->email . $suffix : null,
                 'phone' => $user->phone ? $user->phone . $suffix : null,
                 'whatsapp_phone' => $user->whatsapp_phone ? $user->whatsapp_phone . $suffix : null,
-            ]);
+            ])->saveQuietly();
 
             // Soft delete
             $user->delete();
