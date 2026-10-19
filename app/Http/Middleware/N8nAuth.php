@@ -17,12 +17,15 @@ class N8nAuth
      * 1. Bearer token (Sanctum) - for authenticated app users
      * 2. X-Webhook-Secret header - for n8n webhook calls
      *
+     * With the "secret_only" mode (n8n.auth:secret_only) the Bearer option is
+     * disabled, for routes that operate across organizations.
+     *
      * @param  \Closure(\Illuminate\Http\Request): (\Symfony\Component\HttpFoundation\Response)  $next
      */
-    public function handle(Request $request, Closure $next): Response
+    public function handle(Request $request, Closure $next, ?string $mode = null): Response
     {
         // Option 1: Check if user is authenticated via Sanctum (Bearer token)
-        if ($request->bearerToken()) {
+        if ($mode !== 'secret_only' && $request->bearerToken()) {
             // Try to authenticate with Sanctum
             $guard = Auth::guard('sanctum');
             if ($guard->check()) {

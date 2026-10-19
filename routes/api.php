@@ -166,7 +166,7 @@ Route::prefix('v1/whatsapp/commands')->middleware('n8n.auth')->controller(WhatsA
 });
 
 // N8n Notification Routes - Para enviar notificaciones de WhatsApp
-Route::prefix('v1/notifications')->middleware('n8n.auth')->controller(NotificationController::class)->group(function () {
+Route::prefix('v1/notifications')->middleware('n8n.auth:secret_only')->controller(NotificationController::class)->group(function () {
     Route::get('pending-whatsapp', 'getPendingWhatsApp')->name('api.notifications.pending-whatsapp');
     Route::patch('{id}/status', 'updateStatus')->name('api.notifications.update-status');
 });
