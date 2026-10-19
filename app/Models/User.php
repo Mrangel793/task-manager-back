@@ -106,6 +106,10 @@ class User extends Authenticatable
     /**
      * A new WhatsApp number has not been verified yet, unless whoever changes it
      * sets the verification explicitly in the same save.
+     *
+     * Known edge case (fails safe): if the user is already verified and an admin
+     * changes the number sending whatsapp_verified=true, the flag is not dirty and
+     * ends up false; the admin has to verify it again in a second request.
      */
     protected static function booted(): void
     {
