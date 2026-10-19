@@ -123,7 +123,7 @@ class AuthTest extends TestCase
         $this->createUser($org, 'Admin', ['email' => 'admin@test.com', 'password' => 'Password1']);
 
         $response = $this->postJson('/api/v1/auth/login', [
-            'email' => 'admin@test.com',
+            'credential' => 'admin@test.com',
             'password' => 'Password1',
         ]);
 
@@ -140,7 +140,7 @@ class AuthTest extends TestCase
         $this->createUser($org, 'Admin', ['email' => 'admin@test.com', 'password' => 'Password1']);
 
         $this->postJson('/api/v1/auth/login', [
-            'email' => 'admin@test.com',
+            'credential' => 'admin@test.com',
             'password' => 'Incorrecta1',
         ])->assertStatus(401);
     }
@@ -155,7 +155,7 @@ class AuthTest extends TestCase
         ]);
 
         $this->postJson('/api/v1/auth/login', [
-            'email' => 'inactivo@test.com',
+            'credential' => 'inactivo@test.com',
             'password' => 'Password1',
         ])->assertStatus(403);
     }
@@ -163,7 +163,7 @@ class AuthTest extends TestCase
     public function test_login_falla_con_email_inexistente(): void
     {
         $this->postJson('/api/v1/auth/login', [
-            'email' => 'noexiste@test.com',
+            'credential' => 'noexiste@test.com',
             'password' => 'Password1',
         ])->assertStatus(401);
     }
