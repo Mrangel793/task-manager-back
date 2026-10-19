@@ -245,8 +245,10 @@ class UserController extends Controller
                 $updateData['whatsapp_phone'] = $request->whatsapp_phone;
             }
 
-            if ($request->has('whatsapp_verified') && $request->canChangeWhatsappVerified()) {
-                $updateData['whatsapp_verified'] = $request->boolean('whatsapp_verified');
+            // Sólo se puede quitar la verificación (validado en UpdateUserRequest).
+            if ($request->has('whatsapp_verified') && $request->canChangeWhatsappVerified()
+                && ! $request->boolean('whatsapp_verified')) {
+                $updateData['whatsapp_verified'] = false;
             }
 
             if ($request->has('notification_preferences')) {

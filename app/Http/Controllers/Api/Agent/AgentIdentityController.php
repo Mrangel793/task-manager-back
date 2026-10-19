@@ -101,10 +101,11 @@ class AgentIdentityController extends Controller
                 $linkCode->forceFill(['used_at' => now()])->save();
 
                 return $user;
-            });
+            }, 3);
         } catch (QueryException $e) {
             // 23000: otra vinculación simultánea tomó el número antes (índice único).
-            if (($e->errorInfo[0] ?? null) === '23000') {
+            // 40001: deadlock que persistió tras los 3 intentos de la transacción.
+            if (in_array($e->errorInfo[0] ?? null, ['23000', '40001'], true)) {
                 $result = 'conflict';
             } else {
                 Log::error('Error al vincular WhatsApp desde el agente', ['exception' => $e]);

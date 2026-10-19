@@ -4,6 +4,7 @@ namespace App\Http\Middleware;
 
 use Closure;
 use Illuminate\Http\Request;
+use Laravel\Sanctum\PersonalAccessToken;
 use Symfony\Component\HttpFoundation\Response;
 
 class SetOrganizationContext
@@ -34,11 +35,18 @@ class SetOrganizationContext
             ], 401);
         }
 
+        // Cuenta desactivada: 401 para que el frontend vuelva al login, y se borra el
+        // token usado (los demás tokens del usuario quedan, pero también recibirán 401).
         if (!$user->is_active) {
+            $token = $user->currentAccessToken();
+            if ($token instanceof PersonalAccessToken) {
+                $token->delete();
+            }
+
             return response()->json([
                 'success' => false,
                 'message' => 'Tu cuenta está inactiva. Contacta al administrador.',
-            ], 403);
+            ], 401);
         }
 
         if (!$organization || !$organization->is_active) {

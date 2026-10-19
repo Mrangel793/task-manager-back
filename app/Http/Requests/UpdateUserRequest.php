@@ -93,6 +93,8 @@ class UpdateUserRequest extends FormRequest
                 Rule::unique('users', 'whatsapp_phone')->ignore($userId),
                 PhoneNumber::E164_RULE,
             ] : ['missing'],
+            // Por API sólo se puede QUITAR la verificación. La única vía para verificar
+            // un WhatsApp es la vinculación por código (POST /api/agent/v1/link).
             'whatsapp_verified' => [
                 'sometimes',
                 'boolean',
@@ -101,6 +103,7 @@ class UpdateUserRequest extends FormRequest
                         $fail('Solo un administrador puede cambiar la verificación de WhatsApp de otro usuario.');
                     }
                 },
+                'declined',
             ],
             'notification_preferences' => [
                 'sometimes',
@@ -154,6 +157,7 @@ class UpdateUserRequest extends FormRequest
             'whatsapp_phone.regex' => 'El formato del número de WhatsApp debe ser E.164 (ejemplo: +573001234567).',
 
             'whatsapp_verified.boolean' => 'El campo whatsapp_verified debe ser verdadero o falso.',
+            'whatsapp_verified.declined' => 'Sólo se puede quitar la verificación. El WhatsApp se verifica cuando el usuario lo vincula con un código desde el agente.',
 
             'notification_preferences.json' => 'Las preferencias de notificación deben ser un JSON válido.',
         ];

@@ -141,12 +141,30 @@ class AgentTokenScopeTest extends TestCase
 
     // ------------------------------------------------- SetOrganizationContext
 
-    public function test_usuario_inactivo_con_token_normal_recibe_403(): void
+    public function test_usuario_inactivo_con_token_normal_recibe_401_y_se_borra_el_token(): void
     {
         $token = $this->operador->createToken('auth_token')->plainTextToken;
+        $otroToken = $this->operador->createToken('otro_dispositivo')->plainTextToken;
         User::withoutGlobalScopes()->whereKey($this->operador->id)->update(['is_active' => false]);
 
-        $this->as($token, 'GET', '/api/v1/tasks')->assertStatus(403);
+        $this->as($token, 'GET', '/api/v1/tasks')
+            ->assertStatus(401)
+            ->assertJsonPath('success', false)
+            ->assertJsonPath('message', 'Tu cuenta está inactiva. Contacta al administrador.');
+
+        $this->assertNull(PersonalAccessToken::findToken($token));
+        $this->assertNotNull(PersonalAccessToken::findToken($otroToken));
+        $this->as($token, 'GET', '/api/v1/tasks')->assertStatus(401);
+    }
+
+    public function test_usuario_inactivo_con_sesion_sin_token_persistente_recibe_401(): void
+    {
+        User::withoutGlobalScopes()->whereKey($this->operador->id)->update(['is_active' => false]);
+
+        $this->actingAs($this->operador->fresh(), 'sanctum')
+            ->getJson('/api/v1/tasks')
+            ->assertStatus(401)
+            ->assertJsonPath('message', 'Tu cuenta está inactiva. Contacta al administrador.');
     }
 
     public static function estadosQueInvalidanElTokenDeAgente(): array

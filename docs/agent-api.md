@@ -80,6 +80,11 @@ WhatsApp de otro) se rechaza con el 401 genérico.
 (422, aunque sea Admin o envíe `null`). Sólo quien tiene `manage-users` puede cambiar el de
 **otro** usuario de su organización, y ese número queda sin verificar.
 
+`whatsapp_verified` por API sólo puede ponerse en `false` (`true` → 422). Un número sólo queda
+verificado por dos vías que prueban tener ese WhatsApp: `POST /api/agent/v1/link` o activar la
+cuenta con el enlace que se envió a ese mismo número (si el número cambia antes de activar, el
+enlace pendiente se invalida).
+
 Genera un código de 6 dígitos válido 10 min **atado a ese número** e invalida los códigos
 pendientes del usuario. Se guardan sólo el HMAC del código y el del número (con `APP_KEY`);
 el código en claro sólo se devuelve en esta respuesta. Límite: 5/min.
@@ -169,6 +174,10 @@ queda bloqueada para el agente hasta que se agregue ahí.
 ### Cuándo deja de servir un token de agente
 
 - Vence a los 15 min (401).
+- No sirve en `/api/v1/whatsapp/commands/*` (N8nAuth responde 403 a un token de agente).
+- Cualquier token (de agente o normal) de un usuario desactivado responde 401 con
+  `"Tu cuenta está inactiva. Contacta al administrador."` y se borra el token usado; en
+  `/api/v1/whatsapp/commands/*` también responde 401.
 - El usuario queda inactivo, pierde `whatsapp_verified` o su organización se desactiva: la
   siguiente petición responde 401 y el token se borra.
 - Se cambia el `whatsapp_phone` del usuario (desde gestión de usuarios, `PATCH users/{id}`), se

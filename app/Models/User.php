@@ -107,18 +107,25 @@ class User extends Authenticatable
     }
 
     /**
-     * A new WhatsApp number has not been verified yet, unless whoever changes it
-     * sets the verification explicitly in the same save.
-     *
-     * Known edge case (fails safe): if the user is already verified and an admin
-     * changes the number sending whatsapp_verified=true, the flag is not dirty and
-     * ends up false; the admin has to verify it again in a second request.
+     * A new WhatsApp number has not been verified yet. The API can only remove the
+     * verification; a number becomes verified through the agent link
+     * (POST /api/agent/v1/link, a direct update without events) or by activating
+     * the account with the link sent to that same number.
      */
     protected static function booted(): void
     {
         static::updating(function (User $user) {
             if ($user->isDirty('whatsapp_phone') && ! $user->isDirty('whatsapp_verified')) {
                 $user->whatsapp_verified = false;
+            }
+
+            // El enlace de activación se envió al número anterior y activar la cuenta marca el
+            // WhatsApp como verificado: si el número cambia, ese enlace deja de servir.
+            $numberChanged = $user->isDirty('whatsapp_phone')
+                || ($user->isDirty('phone') && $user->whatsapp_phone === null);
+            if ($numberChanged && $user->activation_token !== null && ! $user->isDirty('activation_token')) {
+                $user->activation_token = null;
+                $user->activation_token_expires_at = null;
             }
         });
 

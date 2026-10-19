@@ -61,4 +61,31 @@ class N8nAuthTest extends TestCase
         $this->postJson(self::ROUTE, [], ['Authorization' => 'Bearer '.$token])
             ->assertStatus(200);
     }
+
+    public function test_token_de_agente_no_sirve_en_comandos_de_whatsapp(): void
+    {
+        config(['n8n.webhook_secret' => null]);
+
+        $user = $this->createUser($this->createOrganization(), 'Operador', [
+            'whatsapp_phone' => '+573001112233',
+            'whatsapp_verified' => true,
+        ]);
+        $token = $user->createToken(\App\Models\User::AGENT_TOKEN_NAME, ['agent'], now()->addMinutes(15))->plainTextToken;
+
+        $this->postJson('/api/v1/whatsapp/commands/list-tasks', [], ['Authorization' => 'Bearer '.$token])
+            ->assertStatus(403)
+            ->assertJsonPath('success', false);
+    }
+
+    public function test_usuario_inactivo_con_token_normal_no_sirve_en_comandos_de_whatsapp(): void
+    {
+        config(['n8n.webhook_secret' => null]);
+
+        $user = $this->createUser($this->createOrganization(), 'Operador', ['is_active' => false]);
+        $token = $user->createToken('auth_token')->plainTextToken;
+
+        $this->postJson('/api/v1/whatsapp/commands/list-tasks', [], ['Authorization' => 'Bearer '.$token])
+            ->assertStatus(401)
+            ->assertJsonPath('success', false);
+    }
 }

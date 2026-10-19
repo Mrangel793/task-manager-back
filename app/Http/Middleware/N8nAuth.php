@@ -29,7 +29,25 @@ class N8nAuth
             // Try to authenticate with Sanctum
             $guard = Auth::guard('sanctum');
             if ($guard->check()) {
-                // User is authenticated via Bearer token
+                $user = $guard->user();
+
+                // El token del agente sólo sirve en /api/v1 con su lista blanca.
+                if ($user->isUsingAgentToken()) {
+                    return response()->json([
+                        'success' => false,
+                        'message' => 'Esta acción no está permitida con un token de agente.',
+                        'data' => null,
+                    ], 403);
+                }
+
+                if (! $user->is_active) {
+                    return response()->json([
+                        'success' => false,
+                        'message' => 'Tu cuenta está inactiva. Contacta al administrador.',
+                        'data' => null,
+                    ], 401);
+                }
+
                 return $next($request);
             }
         }
