@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\Api\Agent\AgentIdentityController;
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\ContactController;
 use App\Http\Controllers\Api\GoogleCalendarAuthController;
@@ -11,6 +12,7 @@ use App\Http\Controllers\Api\TaskController;
 use App\Http\Controllers\Api\UserController;
 use App\Http\Controllers\Api\UserTabController;
 use App\Http\Controllers\Api\WhatsAppCommandController;
+use App\Http\Controllers\Api\WhatsAppLinkController;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -43,11 +45,17 @@ Route::prefix('v1')->group(function () {
 Route::prefix('v1')->middleware(['auth:sanctum', 'org.context'])->group(function () {
     Route::prefix('auth')->controller(AuthController::class)->group(function () {
         Route::post('logout', 'logout')->name('api.auth.logout');
-        Route::post('refresh-token', 'refreshToken')->name('api.auth.refresh-token');
-        Route::post('change-password', 'changePassword')->name('api.auth.change-password');
+        Route::post('refresh-token', 'refreshToken')->middleware('agent.deny')->name('api.auth.refresh-token');
+        Route::post('change-password', 'changePassword')->middleware('agent.deny')->name('api.auth.change-password');
         Route::get('me', 'me')->name('api.auth.me');
         Route::patch('me', 'updateProfile')->name('api.auth.update-profile');
     });
+
+    // Vinculación del WhatsApp del usuario con el agente autónomo
+    Route::post('me/whatsapp-link-code', [WhatsAppLinkController::class, 'createCode'])
+        ->middleware(['agent.deny', 'throttle:5,1'])
+        ->name('api.me.whatsapp-link-code');
+    Route::delete('me/whatsapp', [WhatsAppLinkController::class, 'unlink'])->name('api.me.whatsapp.unlink');
 
     // Users CRUD routes
     Route::get('users', [UserController::class, 'index'])->name('api.users.index');
@@ -169,4 +177,11 @@ Route::prefix('v1/whatsapp/commands')->middleware('n8n.auth')->controller(WhatsA
 Route::prefix('v1/notifications')->middleware('n8n.auth:secret_only')->controller(NotificationController::class)->group(function () {
     Route::get('pending-whatsapp', 'getPendingWhatsApp')->name('api.notifications.pending-whatsapp');
     Route::patch('{id}/status', 'updateStatus')->name('api.notifications.update-status');
+});
+
+// Agente autónomo de WhatsApp (servicio externo) - firma HMAC, sin auth:sanctum
+Route::prefix('agent/v1')->middleware(['throttle:120,1', 'agent.hmac'])->controller(AgentIdentityController::class)->group(function () {
+    Route::post('link', 'link')->middleware('throttle:30,1')->name('api.agent.link');
+    Route::get('whoami', 'whoami')->name('api.agent.whoami');
+    Route::post('token', 'token')->name('api.agent.token');
 });

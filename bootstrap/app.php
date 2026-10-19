@@ -16,6 +16,8 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->alias([
             'check.task.permissions' => \App\Http\Middleware\CheckTaskPermissions::class,
             'n8n.auth' => \App\Http\Middleware\N8nAuth::class,
+            'agent.hmac' => \App\Http\Middleware\AgentHmacAuth::class,
+            'agent.deny' => \App\Http\Middleware\RejectAgentToken::class,
             'org.context' => \App\Http\Middleware\SetOrganizationContext::class,
             'role' => \Spatie\Permission\Middleware\RoleMiddleware::class,
             'permission' => \Spatie\Permission\Middleware\PermissionMiddleware::class,
