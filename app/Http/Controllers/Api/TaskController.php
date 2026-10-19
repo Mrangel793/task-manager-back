@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api;
 
+use App\Exceptions\TaskRuleException;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\StoreTaskRequest;
 use App\Http\Requests\UpdateTaskRequest;
@@ -16,6 +17,7 @@ use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
 
 class TaskController extends Controller
 {
@@ -271,6 +273,8 @@ class TaskController extends Controller
                 'message' => 'Tarea actualizada exitosamente.',
                 'data' => new TaskResource($task),
             ], 200);
+        } catch (TaskRuleException $e) {
+            return $this->taskRuleViolation($e);
         } catch (\Exception $e) {
             Log::error('Error al actualizar tarea: ' . $e->getMessage(), ['exception' => $e]);
 
@@ -318,21 +322,27 @@ class TaskController extends Controller
      */
     public function reassign(Request $request, Task $task): JsonResponse
     {
-        try {
-            $request->validate([
-                'assignee_id' => [
-                    'required',
-                    'uuid',
-                    'exists:users,id',
-                ],
-            ], [
-                'assignee_id.required' => 'Debe especificar el nuevo operador.',
-                'assignee_id.uuid' => 'El ID del operador no es válido.',
-                'assignee_id.exists' => 'El operador seleccionado no existe.',
+        $request->validate([
+            'assignee_id' => [
+                'required',
+                'uuid',
+                'exists:users,id',
+            ],
+        ], [
+            'assignee_id.required' => 'Debe especificar el nuevo operador.',
+            'assignee_id.uuid' => 'El ID del operador no es válido.',
+            'assignee_id.exists' => 'El operador seleccionado no existe.',
+        ]);
+
+        $newAssignee = User::find($request->assignee_id);
+
+        if (! $newAssignee) {
+            throw ValidationException::withMessages([
+                'assignee_id' => 'El operador seleccionado no existe.',
             ]);
+        }
 
-            $newAssignee = User::findOrFail($request->assignee_id);
-
+        try {
             $task = $this->taskService->reassignTask(
                 $task,
                 $newAssignee,
@@ -344,6 +354,8 @@ class TaskController extends Controller
                 'message' => 'Tarea reasignada exitosamente.',
                 'data' => new TaskResource($task),
             ], 200);
+        } catch (TaskRuleException $e) {
+            return $this->taskRuleViolation($e);
         } catch (\Exception $e) {
             Log::error('Error al reasignar tarea: ' . $e->getMessage(), ['exception' => $e]);
 
@@ -384,5 +396,14 @@ class TaskController extends Controller
                 'errors' => ['server' => ['Ocurrió un error inesperado. Por favor, inténtelo de nuevo.']],
             ], 500);
         }
+    }
+
+    private function taskRuleViolation(TaskRuleException $e): JsonResponse
+    {
+        return response()->json([
+            'success' => false,
+            'message' => $e->getMessage(),
+            'errors' => ['assignee_id' => [$e->getMessage()]],
+        ], 422);
     }
 }

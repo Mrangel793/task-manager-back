@@ -7,6 +7,7 @@ use App\Events\TaskCreated;
 use App\Events\TaskDeleted;
 use App\Events\TaskStatusChanged;
 use App\Events\TaskUpdated;
+use App\Exceptions\TaskRuleException;
 use App\Models\Task;
 use App\Models\TaskHistory;
 use App\Models\User;
@@ -193,17 +194,17 @@ class TaskService
 
             // Validate new assignee is active
             if (!$newAssignee->is_active) {
-                throw new \Exception('El usuario seleccionado no está activo.');
+                throw new TaskRuleException('El usuario seleccionado no está activo.');
             }
 
             // Validate assignee belongs to same organization
             if ($newAssignee->organization_id !== $task->organization_id) {
-                throw new \Exception('El usuario seleccionado no pertenece a la misma organización.');
+                throw new TaskRuleException('El usuario seleccionado no pertenece a la misma organización.');
             }
 
             // Non-Admin can only reassign to Operadores
             if (!$user->hasRole('Admin') && !$newAssignee->hasRole('Operador')) {
-                throw new \Exception('Solo se pueden asignar tareas a operadores.');
+                throw new TaskRuleException('Solo se pueden asignar tareas a operadores.');
             }
 
             $oldAssigneeId = $task->assignee_id;
