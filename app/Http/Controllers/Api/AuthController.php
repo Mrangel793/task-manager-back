@@ -17,6 +17,7 @@ use App\Notifications\ResetPasswordNotification;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Password;
 use Illuminate\Support\Str;
+use Illuminate\Validation\Rule;
 
 class AuthController extends Controller
 {
@@ -432,14 +433,21 @@ class AuthController extends Controller
             'name' => 'sometimes|string|max:255',
             'email' => 'sometimes|email|unique:users,email,' . $user->id,
             'phone' => 'sometimes|nullable|string|max:20',
-            'whatsapp_phone' => 'sometimes|nullable|string|max:20',
+            'whatsapp_phone' => [
+                'sometimes',
+                'nullable',
+                'string',
+                Rule::unique('users', 'whatsapp_phone')->ignore($user->id),
+                'regex:/^\+[1-9]\d{1,14}$/',
+            ],
             'notification_preferences' => 'sometimes|array',
         ], [
             'name.max' => 'El nombre no puede tener más de 255 caracteres.',
             'email.email' => 'El correo electrónico debe ser válido.',
             'email.unique' => 'Este correo electrónico ya está en uso.',
             'phone.max' => 'El teléfono no puede tener más de 20 caracteres.',
-            'whatsapp_phone.max' => 'El teléfono de WhatsApp no puede tener más de 20 caracteres.',
+            'whatsapp_phone.unique' => 'Este número de WhatsApp ya está registrado.',
+            'whatsapp_phone.regex' => 'El formato del número de WhatsApp debe ser E.164 (ejemplo: +573001234567).',
         ]);
 
         try {
