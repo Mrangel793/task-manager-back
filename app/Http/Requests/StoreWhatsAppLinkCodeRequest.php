@@ -17,7 +17,11 @@ class StoreWhatsAppLinkCodeRequest extends AgentPhoneRequest
                 'required',
                 'string',
                 self::E164,
-                Rule::unique('users', 'whatsapp_phone')->ignore($this->user()?->id),
+                // Sólo bloquea un número que otro usuario ya verificó; uno apartado sin
+                // verificar se le quita al vincular (ver AgentIdentityController::link).
+                Rule::unique('users', 'whatsapp_phone')
+                    ->where('whatsapp_verified', true)
+                    ->ignore($this->user()?->id),
             ],
         ];
     }

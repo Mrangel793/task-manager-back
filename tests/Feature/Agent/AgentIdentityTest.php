@@ -300,6 +300,63 @@ class AgentIdentityTest extends TestCase
         }
     }
 
+    public function test_numero_apartado_sin_verificar_en_otra_org_no_bloquea_la_vinculacion(): void
+    {
+        $orgA = $this->createOrganization();
+        $atacante = $this->createUser($orgA, 'Operador');
+        $orgB = $this->createOrganization();
+        $victima = $this->createUser($orgB, 'Operador');
+
+        // El atacante ya no puede apartar el número desde su cuenta...
+        $this->actingAs($atacante, 'sanctum')
+            ->patchJson("/api/v1/users/{$atacante->id}", ['whatsapp_phone' => self::PHONE])
+            ->assertStatus(422);
+        $this->app['auth']->forgetGuards();
+
+        // ...y si ya lo tenía apartado (datos previos o lo puso un admin), no bloquea a la víctima.
+        User::withoutGlobalScopes()->whereKey($atacante->id)
+            ->update(['whatsapp_phone' => self::PHONE, 'whatsapp_verified' => false]);
+        $tokenAtacante = $atacante->createToken(User::AGENT_TOKEN_NAME, ['agent'], now()->addMinutes(15))->plainTextToken;
+
+        $code = $this->generateCode($victima, self::PHONE);
+
+        $this->agentCall('POST', '/api/agent/v1/link', ['phone' => self::PHONE, 'code' => $code])
+            ->assertStatus(200)
+            ->assertJsonPath('data.user_id', $victima->id);
+
+        $this->assertSame(self::PHONE, $this->freshUser($victima)->whatsapp_phone);
+        $this->assertTrue($this->freshUser($victima)->whatsapp_verified);
+        $this->assertNull($this->freshUser($atacante)->whatsapp_phone);
+        $this->assertFalse($this->freshUser($atacante)->whatsapp_verified);
+        $this->assertNull(\Laravel\Sanctum\PersonalAccessToken::findToken($tokenAtacante));
+    }
+
+    public function test_numero_verificado_de_otro_usuario_bloquea_generar_codigo(): void
+    {
+        $this->createUser($this->createOrganization(), 'Operador', [
+            'whatsapp_phone' => self::PHONE, 'whatsapp_verified' => true,
+        ]);
+        $user = $this->createUser($this->createOrganization());
+
+        $this->actingAs($user, 'sanctum')
+            ->postJson('/api/v1/me/whatsapp-link-code', ['phone' => self::PHONE])
+            ->assertStatus(422)
+            ->assertJsonValidationErrors('phone');
+    }
+
+    public function test_numero_verificado_por_otro_tras_generar_el_codigo_responde_409(): void
+    {
+        $org = $this->createOrganization();
+        $user = $this->createUser($org);
+        $code = $this->generateCode($user);
+        $otro = $this->createUser($org, 'Operador', ['whatsapp_phone' => self::PHONE, 'whatsapp_verified' => true]);
+
+        $this->agentCall('POST', '/api/agent/v1/link', ['phone' => self::PHONE, 'code' => $code])->assertStatus(409);
+
+        $this->assertSame(self::PHONE, $this->freshUser($otro)->whatsapp_phone);
+        $this->assertNull($this->freshUser($user)->whatsapp_phone);
+    }
+
     public function test_codigo_correcto_desde_otro_numero_responde_422(): void
     {
         $user = $this->createUser($this->createOrganization());
@@ -354,7 +411,7 @@ class AgentIdentityTest extends TestCase
     public function test_generar_codigo_exige_phone_e164_libre(): void
     {
         $org = $this->createOrganization();
-        $this->createUser($org, 'Operador', ['whatsapp_phone' => '+573005550000']);
+        $this->createUser($org, 'Operador', ['whatsapp_phone' => '+573005550000', 'whatsapp_verified' => true]);
         $user = $this->createUser($org);
 
         $this->actingAs($user, 'sanctum')->postJson('/api/v1/me/whatsapp-link-code')
@@ -378,21 +435,6 @@ class AgentIdentityTest extends TestCase
         $this->artisan('model:prune', ['--model' => [WhatsAppLinkCode::class]])->assertSuccessful();
 
         $this->assertSame([$vigente->id], WhatsAppLinkCode::pluck('id')->all());
-    }
-
-    public function test_telefono_de_otro_usuario_responde_409(): void
-    {
-        $org = $this->createOrganization();
-        $user = $this->createUser($org);
-        $code = $this->generateCode($user);
-        // Otro usuario registra el número después de generado el código.
-        $this->createUser($org, 'Operador', ['whatsapp_phone' => self::PHONE]);
-
-        $this->agentCall('POST', '/api/agent/v1/link', ['phone' => self::PHONE, 'code' => $code])
-            ->assertStatus(409)
-            ->assertJsonPath('success', false);
-
-        $this->assertNull($this->freshUser($user)->whatsapp_phone);
     }
 
     public function test_link_con_telefono_no_e164_responde_422(): void

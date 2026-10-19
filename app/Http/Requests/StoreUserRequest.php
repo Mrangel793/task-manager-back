@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests;
 
+use App\Support\PhoneNumber;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
@@ -35,7 +36,7 @@ class StoreUserRequest extends FormRequest
                 'required',
                 'string',
                 Rule::unique('users', 'phone')->whereNull('deleted_at'),
-                'regex:/^\+[1-9]\d{1,14}$/', // E.164 format
+                PhoneNumber::E164_RULE,
             ],
             'name' => [
                 'required',
@@ -63,7 +64,7 @@ class StoreUserRequest extends FormRequest
                 'nullable',
                 'string',
                 Rule::unique('users', 'whatsapp_phone')->whereNull('deleted_at'),
-                'regex:/^\+[1-9]\d{1,14}$/', // E.164 format
+                PhoneNumber::E164_RULE,
             ],
             'notification_preferences' => [
                 'nullable',

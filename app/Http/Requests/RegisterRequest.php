@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests;
 
+use App\Support\PhoneNumber;
 use Illuminate\Foundation\Http\FormRequest;
 
 class RegisterRequest extends FormRequest
@@ -46,7 +47,7 @@ class RegisterRequest extends FormRequest
             'phone' => [
                 'nullable',
                 'string',
-                'regex:/^\+[1-9]\d{1,14}$/', // E.164 format
+                PhoneNumber::E164_RULE,
             ],
             'name' => [
                 'required',

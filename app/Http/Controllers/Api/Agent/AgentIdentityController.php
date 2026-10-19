@@ -64,14 +64,30 @@ class AgentIdentityController extends Controller
                     return 'invalid';
                 }
 
-                $phoneTaken = $this->usersWithoutOrgScope()
+                $holder = $this->usersWithoutOrgScope()
                     ->withTrashed()
                     ->where('whatsapp_phone', $phone)
                     ->where('id', '!=', $user->id)
-                    ->exists();
+                    ->lockForUpdate()
+                    ->first();
 
-                if ($phoneTaken) {
+                if ($holder?->whatsapp_verified) {
                     return 'conflict';
+                }
+
+                // Quien tenía el número apartado sin verificar lo pierde: quien demuestra
+                // tenerlo es quien envía el código desde ese WhatsApp.
+                if ($holder) {
+                    $this->usersWithoutOrgScope()->withTrashed()->whereKey($holder->id)->update([
+                        'whatsapp_phone' => null,
+                        'whatsapp_verified' => false,
+                        'updated_at' => now(),
+                    ]);
+                    $holder->revokeAgentTokens();
+                    Log::info('Agente: numero de WhatsApp no verificado liberado al vincularlo otro usuario', [
+                        'from_user_id' => $holder->id,
+                        'to_user_id' => $user->id,
+                    ]);
                 }
 
                 // Update directo: el hook "updating" de User pondría whatsapp_verified=false
@@ -87,6 +103,7 @@ class AgentIdentityController extends Controller
                 return $user;
             });
         } catch (QueryException $e) {
+            // 23000: otra vinculación simultánea tomó el número antes (índice único).
             if (($e->errorInfo[0] ?? null) === '23000') {
                 $result = 'conflict';
             } else {

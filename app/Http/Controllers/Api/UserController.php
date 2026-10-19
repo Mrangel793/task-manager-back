@@ -241,7 +241,7 @@ class UserController extends Controller
                 $updateData['password'] = $request->password;
             }
 
-            if ($request->has('whatsapp_phone')) {
+            if ($request->has('whatsapp_phone') && $request->canChangeWhatsappVerified()) {
                 $updateData['whatsapp_phone'] = $request->whatsapp_phone;
             }
 

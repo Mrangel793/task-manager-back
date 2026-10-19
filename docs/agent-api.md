@@ -76,12 +76,17 @@ la única vía para el usuario. En el login, un `whatsapp_phone` sólo sirve com
 está verificado, y si la credencial coincide con más de un usuario (el `phone` de uno y el
 WhatsApp de otro) se rechaza con el 401 genérico.
 
+`PATCH /api/v1/users/{id}` tampoco deja que un usuario cambie **su propio** `whatsapp_phone`
+(422, aunque sea Admin o envíe `null`). Sólo quien tiene `manage-users` puede cambiar el de
+**otro** usuario de su organización, y ese número queda sin verificar.
+
 Genera un código de 6 dígitos válido 10 min **atado a ese número** e invalida los códigos
 pendientes del usuario. Se guardan sólo el HMAC del código y el del número (con `APP_KEY`);
 el código en claro sólo se devuelve en esta respuesta. Límite: 5/min.
 
 - `201 {"success": true, "message": "...", "data": {"code": "042817", "expires_at": "2026-10-19T15:10:00-05:00"}}`
-- `422` con `errors.phone` si falta, no es E.164 o ya es el WhatsApp de otro usuario.
+- `422` con `errors.phone` si falta, no es E.164 o ya es el WhatsApp **verificado** de otro
+  usuario. Un número que otro usuario tiene sin verificar no bloquea (ver `/link`).
 - `401` sin token. `403` si se llama con un token de agente.
 
 ### `DELETE /api/v1/me/whatsapp`
@@ -105,10 +110,15 @@ código enviado desde otro número responde 422, así que rotar números no ayud
 | Respuesta | Cuándo |
 |-----------|--------|
 | `200 {"success": true, "data": {"user_id", "name", "organization": {"id", "name"}}}` | código vigente para ese número; el usuario queda con `whatsapp_phone = phone` y `whatsapp_verified = true` |
-| `409 {"success": false, "message": "..."}` | ese teléfono pasó a ser de otro usuario después de generar el código (el código no se consume) |
+| `409 {"success": false, "message": "..."}` | otro usuario **verificó** ese número después de generar el código, o lo tomó en una vinculación simultánea (el código no se consume) |
 | `422 {"success": false, "message": "Código inválido o vencido."}` | código inexistente, de otro número, vencido, ya usado o invalidado por intentos; usuario u organización inactivos |
 | `422` con `errors` | `phone` no E.164 o `code` sin 6 dígitos |
 | `429` | ese número acumuló más de 5 fallos en 10 min, **o** `/link` acumuló más de 50 fallos en total en 10 min (bloqueo global para todos, con `Log::warning`) |
+
+Si otro usuario (de cualquier organización) tenía ese número **sin verificar**, al vincular se
+le quita (`whatsapp_phone = null`) y se revocan sus tokens `whatsapp-agent`: el número es de
+quien demuestra tenerlo enviando el código desde ese WhatsApp. Queda un `Log::info` con
+ambos ids.
 
 Intentos: cada fallo desde un número suma `attempts` al código vigente de ese número; al
 6º fallo el código queda invalidado aunque luego se envíe el correcto (hay que generar otro).
@@ -164,6 +174,26 @@ queda bloqueada para el agente hasta que se agregue ahí.
 - Se cambia el `whatsapp_phone` del usuario (desde gestión de usuarios, `PATCH users/{id}`), se
   le quita la verificación, se desvincula o se borra el usuario: se revocan todos sus tokens
   `whatsapp-agent`. Al borrar un usuario también se liberan su email, teléfono y WhatsApp.
+
+## Despliegue: revisar colisiones antes de subir
+
+El login ahora rechaza (401 genérico) una credencial que coincide con el `phone` de un usuario
+y con el WhatsApp verificado de otro. Antes de desplegar, busca esos casos en la BD de
+producción para resolverlos (cambiar o desverificar uno de los dos números) y que nadie se
+quede sin poder entrar:
+
+```sql
+SELECT a.id, b.id
+FROM users a
+JOIN users b ON a.phone = b.whatsapp_phone
+    AND a.id <> b.id
+    AND b.whatsapp_verified = 1
+    AND a.deleted_at IS NULL
+    AND b.deleted_at IS NULL;
+```
+
+Si devuelve filas, `a` es quien entra con su `phone` y `b` quien tiene ese número como WhatsApp
+verificado.
 
 ## Lecturas por SQL
 

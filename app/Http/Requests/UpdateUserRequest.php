@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests;
 
+use App\Support\PhoneNumber;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
@@ -54,7 +55,7 @@ class UpdateUserRequest extends FormRequest
                 'nullable',
                 'string',
                 Rule::unique('users', 'phone')->ignore($userId),
-                'regex:/^\+[1-9]\d{1,14}$/', // E.164 format
+                PhoneNumber::E164_RULE,
             ],
             'password' => [
                 'sometimes',
@@ -83,13 +84,15 @@ class UpdateUserRequest extends FormRequest
                     }
                 },
             ],
-            'whatsapp_phone' => [
+            // Igual que whatsapp_verified: nadie fija su propio WhatsApp (sólo la vinculación
+            // por código); un gestor de usuarios puede hacerlo sobre otro usuario de su org.
+            'whatsapp_phone' => $this->canChangeWhatsappVerified() ? [
                 'sometimes',
                 'nullable',
                 'string',
                 Rule::unique('users', 'whatsapp_phone')->ignore($userId),
-                'regex:/^\+[1-9]\d{1,14}$/', // E.164 format
-            ],
+                PhoneNumber::E164_RULE,
+            ] : ['missing'],
             'whatsapp_verified' => [
                 'sometimes',
                 'boolean',
@@ -146,6 +149,7 @@ class UpdateUserRequest extends FormRequest
 
             'is_active.boolean' => 'El campo is_active debe ser verdadero o falso.',
 
+            'whatsapp_phone.missing' => 'Tu número de WhatsApp se vincula con un código desde el agente; sólo un administrador puede cambiar el de otro usuario.',
             'whatsapp_phone.unique' => 'Este número de WhatsApp ya está registrado.',
             'whatsapp_phone.regex' => 'El formato del número de WhatsApp debe ser E.164 (ejemplo: +573001234567).',
 
