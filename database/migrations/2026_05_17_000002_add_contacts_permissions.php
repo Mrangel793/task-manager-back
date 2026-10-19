@@ -13,7 +13,7 @@ return new class extends Migration
         $viewContacts   = Permission::firstOrCreate(['name' => 'view-contacts']);
         $manageContacts = Permission::firstOrCreate(['name' => 'manage-contacts']);
 
-        $adminRole = Role::findByName('Admin');
+        $adminRole = Role::where('name', 'Admin')->first();
         if ($adminRole) {
             $adminRole->givePermissionTo([$viewContacts, $manageContacts]);
         }
