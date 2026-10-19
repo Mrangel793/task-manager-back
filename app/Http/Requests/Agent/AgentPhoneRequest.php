@@ -6,7 +6,7 @@ use Illuminate\Foundation\Http\FormRequest;
 
 class AgentPhoneRequest extends FormRequest
 {
-    public const E164 = 'regex:/^\+[1-9]\d{1,14}$/';
+    public const E164 = 'regex:/^\+[1-9]\d{7,14}$/';
 
     public function authorize(): bool
     {

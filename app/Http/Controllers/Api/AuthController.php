@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\LoginRequest;
 use App\Http\Requests\RegisterRequest;
 use App\Models\Organization;
+use App\Models\Scopes\OrganizationScope;
 use App\Models\User;
 use App\Models\WhatsAppSession;
 use Illuminate\Http\JsonResponse;
@@ -17,7 +18,6 @@ use App\Notifications\ResetPasswordNotification;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Password;
 use Illuminate\Support\Str;
-use Illuminate\Validation\Rule;
 
 class AuthController extends Controller
 {
@@ -218,7 +218,9 @@ class AuthController extends Controller
             $credential = $request->credential;
             $isPhone = str_starts_with($credential, '+') || preg_match('/^\d{7,}$/', $credential);
 
-            $user = User::withoutGlobalScopes()
+            // El WhatsApp sólo sirve como credencial si está verificado. Si la credencial
+            // coincide con más de un usuario (phone de uno, WhatsApp de otro) no se elige ninguno.
+            $matches = User::withoutGlobalScope(OrganizationScope::class)
                 ->where(function ($query) use ($credential, $isPhone) {
                     if ($isPhone) {
                         // Normalize: if just digits starting with 3, assume Colombian +57
@@ -227,12 +229,21 @@ class AuthController extends Controller
                             $phone = '+57' . $credential;
                         }
                         $query->where('phone', $phone)
-                              ->orWhere('whatsapp_phone', $phone);
+                              ->orWhere(fn ($q) => $q->where('whatsapp_phone', $phone)->where('whatsapp_verified', true));
                     } else {
                         $query->where('email', $credential);
                     }
                 })
-                ->first();
+                ->limit(2)
+                ->get();
+
+            if ($matches->count() > 1) {
+                Log::warning('Login rechazado: la credencial coincide con varios usuarios', [
+                    'user_ids' => $matches->pluck('id')->all(),
+                ]);
+            }
+
+            $user = $matches->count() === 1 ? $matches->first() : null;
 
             // Validate credentials
             if (!$user || !Hash::check($request->password, $user->password)) {
@@ -433,21 +444,15 @@ class AuthController extends Controller
             'name' => 'sometimes|string|max:255',
             'email' => 'sometimes|email|unique:users,email,' . $user->id,
             'phone' => 'sometimes|nullable|string|max:20',
-            'whatsapp_phone' => [
-                'sometimes',
-                'nullable',
-                'string',
-                Rule::unique('users', 'whatsapp_phone')->ignore($user->id),
-                'regex:/^\+[1-9]\d{1,14}$/',
-            ],
+            // El WhatsApp sólo se fija con la vinculación por código (me/whatsapp-link-code + agente).
+            'whatsapp_phone' => 'prohibited',
             'notification_preferences' => 'sometimes|array',
         ], [
             'name.max' => 'El nombre no puede tener más de 255 caracteres.',
             'email.email' => 'El correo electrónico debe ser válido.',
             'email.unique' => 'Este correo electrónico ya está en uso.',
             'phone.max' => 'El teléfono no puede tener más de 20 caracteres.',
-            'whatsapp_phone.unique' => 'Este número de WhatsApp ya está registrado.',
-            'whatsapp_phone.regex' => 'El formato del número de WhatsApp debe ser E.164 (ejemplo: +573001234567).',
+            'whatsapp_phone.prohibited' => 'El número de WhatsApp se vincula con un código desde el agente, no desde el perfil.',
         ]);
 
         try {
@@ -455,7 +460,6 @@ class AuthController extends Controller
                 'name',
                 'email',
                 'phone',
-                'whatsapp_phone',
                 'notification_preferences',
             ]));
 

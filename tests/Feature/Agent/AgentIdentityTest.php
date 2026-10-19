@@ -5,6 +5,7 @@ namespace Tests\Feature\Agent;
 use App\Models\Organization;
 use App\Models\User;
 use App\Models\WhatsAppLinkCode;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Testing\TestResponse;
@@ -224,6 +225,79 @@ class AgentIdentityTest extends TestCase
             ->assertStatus(422);
 
         $this->assertNull($this->freshUser($user)->whatsapp_phone);
+    }
+
+    /**
+     * BUG-01: con explicit_defaults_for_timestamp=0 (default de MariaDB 10.6) una columna
+     * TIMESTAMP NOT NULL queda con ON UPDATE CURRENT_TIMESTAMP y cada UPDATE la reescribe.
+     */
+    public function test_un_intento_fallido_no_reescribe_expires_at(): void
+    {
+        $user = $this->createUser($this->createOrganization());
+        $code = $this->generateCode($user);
+        $wrong = $code === '000000' ? '000001' : '000000';
+        $before = DB::table('whatsapp_link_codes')->where('user_id', $user->id)->value('expires_at');
+
+        $this->travel(2)->seconds();
+        $this->agentCall('POST', '/api/agent/v1/link', ['phone' => self::PHONE, 'code' => $wrong])->assertStatus(422);
+
+        $row = DB::table('whatsapp_link_codes')->where('user_id', $user->id)->first();
+        $this->assertSame(1, (int) $row->attempts);
+        $this->assertSame($before, $row->expires_at);
+
+        $this->agentCall('POST', '/api/agent/v1/link', ['phone' => self::PHONE, 'code' => $code])->assertStatus(200);
+    }
+
+    public function test_columnas_de_fecha_del_codigo_no_tienen_on_update(): void
+    {
+        $columns = DB::select(
+            'SELECT COLUMN_NAME AS name, DATA_TYPE AS type, EXTRA AS extra FROM information_schema.COLUMNS
+             WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND COLUMN_NAME IN (?, ?)',
+            ['whatsapp_link_codes', 'expires_at', 'used_at']
+        );
+
+        $this->assertCount(2, $columns);
+        foreach ($columns as $column) {
+            $this->assertSame('datetime', strtolower($column->type), $column->name);
+            $this->assertStringNotContainsStringIgnoringCase('on update', $column->extra, $column->name);
+        }
+    }
+
+    public static function telefonosNoE164(): array
+    {
+        return [
+            'muy corto' => ['+5730012'],
+            'dos digitos' => ['+12'],
+            'mas de 15' => ['+5730012345678901'],
+            'empieza en 0' => ['+0573001234567'],
+            'sin +' => ['573001234567'],
+        ];
+    }
+
+    #[\PHPUnit\Framework\Attributes\DataProvider('telefonosNoE164')]
+    public function test_e164_exige_entre_8_y_15_digitos(string $phone): void
+    {
+        $user = $this->createUser($this->createOrganization());
+
+        $this->agentCall('POST', '/api/agent/v1/link', ['phone' => $phone, 'code' => '123456'])
+            ->assertStatus(422)->assertJsonValidationErrors('phone');
+        $this->agentCall('GET', $this->whoamiUri($phone))->assertStatus(422);
+        $this->agentCall('POST', '/api/agent/v1/token', ['phone' => $phone])->assertStatus(422);
+        $this->actingAs($user, 'sanctum')
+            ->postJson('/api/v1/me/whatsapp-link-code', ['phone' => $phone])
+            ->assertStatus(422)->assertJsonValidationErrors('phone');
+    }
+
+    public function test_e164_acepta_8_y_15_digitos(): void
+    {
+        $user = $this->createUser($this->createOrganization());
+
+        foreach (['+12345678', '+573001234567890'] as $phone) {
+            $this->actingAs($user, 'sanctum')
+                ->postJson('/api/v1/me/whatsapp-link-code', ['phone' => $phone])
+                ->assertStatus(201);
+            $this->app['auth']->forgetGuards();
+        }
     }
 
     public function test_codigo_correcto_desde_otro_numero_responde_422(): void

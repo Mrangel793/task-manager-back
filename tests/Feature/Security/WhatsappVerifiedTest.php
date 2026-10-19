@@ -72,7 +72,7 @@ class WhatsappVerifiedTest extends TestCase
         $this->assertFalse($this->freshVerified($operador));
     }
 
-    public function test_cambiar_whatsapp_phone_desde_perfil_desverifica(): void
+    public function test_perfil_no_puede_cambiar_whatsapp_phone(): void
     {
         $org = $this->createOrganization();
         $operador = $this->createUser($org, 'Operador', [
@@ -82,10 +82,11 @@ class WhatsappVerifiedTest extends TestCase
 
         $this->actingAs($operador, 'sanctum')
             ->patchJson('/api/v1/auth/me', ['whatsapp_phone' => '+573009998877'])
-            ->assertStatus(200)
-            ->assertJsonPath('data.user.whatsapp_verified', false);
+            ->assertStatus(422)
+            ->assertJsonValidationErrors('whatsapp_phone');
 
-        $this->assertFalse($this->freshVerified($operador));
+        $this->assertTrue($this->freshVerified($operador));
+        $this->assertSame('+573001112233', User::withoutGlobalScopes()->find($operador->id)->whatsapp_phone);
     }
 
     public function test_perfil_con_whatsapp_phone_de_otro_usuario_devuelve_422(): void
@@ -113,14 +114,15 @@ class WhatsappVerifiedTest extends TestCase
             ->assertJsonValidationErrors('whatsapp_phone');
     }
 
-    public function test_perfil_puede_reenviar_su_propio_whatsapp_phone(): void
+    public function test_perfil_rechaza_whatsapp_phone_aunque_sea_el_mismo(): void
     {
         $org = $this->createOrganization();
         $operador = $this->createUser($org, 'Operador', ['whatsapp_phone' => '+573001112233']);
 
         $this->actingAs($operador, 'sanctum')
             ->patchJson('/api/v1/auth/me', ['whatsapp_phone' => '+573001112233'])
-            ->assertStatus(200);
+            ->assertStatus(422)
+            ->assertJsonValidationErrors('whatsapp_phone');
     }
 
     public function test_reenviar_el_mismo_whatsapp_phone_no_desverifica(): void

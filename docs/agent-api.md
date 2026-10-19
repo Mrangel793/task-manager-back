@@ -68,7 +68,13 @@ haga falta y, si se hace, considera rotar `AGENT_HMAC_SECRET`. Con `CACHE_STORE=
 
 ### `POST /api/v1/me/whatsapp-link-code`
 
-Body: `{"phone": "+573001234567"}` (E.164, el número de WhatsApp que se va a vincular).
+Body: `{"phone": "+573001234567"}` (E.164 con 8 a 15 dígitos, `^\+[1-9]\d{7,14}$`; el número de WhatsApp que se va a vincular).
+La misma regla aplica a `phone` en `/link`, `/whoami` y `/token`.
+
+`PATCH /api/v1/auth/me` ya **no** acepta `whatsapp_phone` (422): la vinculación por código es
+la única vía para el usuario. En el login, un `whatsapp_phone` sólo sirve como credencial si
+está verificado, y si la credencial coincide con más de un usuario (el `phone` de uno y el
+WhatsApp de otro) se rechaza con el 401 genérico.
 
 Genera un código de 6 dígitos válido 10 min **atado a ese número** e invalida los códigos
 pendientes del usuario. Se guardan sólo el HMAC del código y el del número (con `APP_KEY`);
@@ -155,7 +161,7 @@ queda bloqueada para el agente hasta que se agregue ahí.
 - Vence a los 15 min (401).
 - El usuario queda inactivo, pierde `whatsapp_verified` o su organización se desactiva: la
   siguiente petición responde 401 y el token se borra.
-- Se cambia el `whatsapp_phone` del usuario (desde gestión de usuarios o desde su perfil), se
+- Se cambia el `whatsapp_phone` del usuario (desde gestión de usuarios, `PATCH users/{id}`), se
   le quita la verificación, se desvincula o se borra el usuario: se revocan todos sus tokens
   `whatsapp-agent`. Al borrar un usuario también se liberan su email, teléfono y WhatsApp.
 

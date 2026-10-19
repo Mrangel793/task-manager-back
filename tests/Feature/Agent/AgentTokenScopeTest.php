@@ -185,12 +185,12 @@ class AgentTokenScopeTest extends TestCase
         $this->assertNotNull(PersonalAccessToken::findToken($normalToken));
     }
 
-    public function test_usuario_cambia_su_whatsapp_desde_perfil_y_se_revocan_tokens_de_agente(): void
+    public function test_usuario_cambia_su_whatsapp_desde_users_y_se_revocan_tokens_de_agente(): void
     {
         $agentToken = $this->agentToken($this->operador);
 
         $this->actingAs($this->operador, 'sanctum')
-            ->patchJson('/api/v1/auth/me', ['whatsapp_phone' => '+573007770000'])
+            ->patchJson("/api/v1/users/{$this->operador->id}", ['whatsapp_phone' => '+573007770000'])
             ->assertStatus(200);
 
         $this->assertNull(PersonalAccessToken::findToken($agentToken));
