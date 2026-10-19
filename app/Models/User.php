@@ -104,6 +104,19 @@ class User extends Authenticatable
     }
 
     /**
+     * A new WhatsApp number has not been verified yet, unless whoever changes it
+     * sets the verification explicitly in the same save.
+     */
+    protected static function booted(): void
+    {
+        static::updating(function (User $user) {
+            if ($user->isDirty('whatsapp_phone') && ! $user->isDirty('whatsapp_verified')) {
+                $user->whatsapp_verified = false;
+            }
+        });
+    }
+
+    /**
      * Get tasks assigned to this user.
      *
      * @return HasMany

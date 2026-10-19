@@ -93,6 +93,11 @@ class UpdateUserRequest extends FormRequest
             'whatsapp_verified' => [
                 'sometimes',
                 'boolean',
+                function ($attribute, $value, $fail) {
+                    if (! $this->canChangeWhatsappVerified()) {
+                        $fail('Solo un administrador puede cambiar la verificación de WhatsApp de otro usuario.');
+                    }
+                },
             ],
             'notification_preferences' => [
                 'sometimes',
@@ -100,6 +105,19 @@ class UpdateUserRequest extends FormRequest
                 'json',
             ],
         ];
+    }
+
+    /**
+     * whatsapp_verified identifies the user in the WhatsApp agent, so nobody may
+     * change it on their own account; only a user manager may, on someone else.
+     */
+    public function canChangeWhatsappVerified(): bool
+    {
+        $user = $this->user();
+
+        return $user !== null
+            && $user->can('manage-users')
+            && $user->id !== $this->route('user')->id;
     }
 
     /**
