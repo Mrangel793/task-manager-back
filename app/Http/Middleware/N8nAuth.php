@@ -35,18 +35,21 @@ class N8nAuth
         $webhookSecret = config('n8n.webhook_secret');
         $requestSecret = $request->header('X-Webhook-Secret');
 
-        // If webhook secret is configured and matches, allow the request
-        if (!empty($webhookSecret) && $requestSecret === $webhookSecret) {
-            return $next($request);
-        }
-
-        // If no webhook secret is configured at all, allow n8n requests without auth
-        // (useful for development/testing)
-        if (empty($webhookSecret) && !$request->bearerToken()) {
-            Log::warning('N8n webhook secret not configured. Request allowed without authentication.', [
+        // Fail closed: without a configured secret no webhook request is accepted.
+        if (! is_string($webhookSecret) || $webhookSecret === '') {
+            Log::error('N8n webhook secret not configured. Request rejected.', [
                 'ip' => $request->ip(),
                 'path' => $request->path(),
             ]);
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Unauthorized. Provide a valid Bearer token or X-Webhook-Secret.',
+                'data' => null,
+            ], 401);
+        }
+
+        if (is_string($requestSecret) && hash_equals($webhookSecret, $requestSecret)) {
             return $next($request);
         }
 
