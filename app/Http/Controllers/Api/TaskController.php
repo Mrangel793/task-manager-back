@@ -15,9 +15,22 @@ use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Validation\Rule;
 
 class TaskController extends Controller
 {
+    private const SORTABLE_COLUMNS = [
+        'id',
+        'title',
+        'status',
+        'due_date',
+        'due_time',
+        'started_at',
+        'completed_at',
+        'created_at',
+        'updated_at',
+    ];
+
     protected TaskService $taskService;
 
     /**
@@ -40,6 +53,14 @@ class TaskController extends Controller
      */
     public function index(Request $request): AnonymousResourceCollection
     {
+        $request->validate([
+            'sort_by' => ['sometimes', 'string', Rule::in(self::SORTABLE_COLUMNS)],
+            'sort_order' => ['sometimes', 'string', Rule::in(['asc', 'desc'])],
+        ], [
+            'sort_by.in' => 'El campo sort_by debe ser uno de: '.implode(', ', self::SORTABLE_COLUMNS).'.',
+            'sort_order.in' => 'El campo sort_order debe ser asc o desc.',
+        ]);
+
         try {
             $user = $request->user();
 
@@ -148,12 +169,12 @@ class TaskController extends Controller
                 'data' => new TaskResource($task),
             ], 201);
         } catch (\Exception $e) {
-            Log::error('Error al crear tarea: ' . $e->getMessage());
+            Log::error('Error al crear tarea: ' . $e->getMessage(), ['exception' => $e]);
 
             return response()->json([
                 'success' => false,
                 'message' => 'Error al crear la tarea.',
-                'errors' => ['server' => [$e->getMessage()]],
+                'errors' => ['server' => ['Ocurrió un error inesperado. Por favor, inténtelo de nuevo.']],
             ], 500);
         }
     }
@@ -193,12 +214,12 @@ class TaskController extends Controller
                 'data' => new TaskResource($task),
             ], 200);
         } catch (\Exception $e) {
-            Log::error('Error al mostrar tarea: ' . $e->getMessage());
+            Log::error('Error al mostrar tarea: ' . $e->getMessage(), ['exception' => $e]);
 
             return response()->json([
                 'success' => false,
                 'message' => 'Error al obtener la tarea.',
-                'errors' => ['server' => [$e->getMessage()]],
+                'errors' => ['server' => ['Ocurrió un error inesperado. Por favor, inténtelo de nuevo.']],
             ], 500);
         }
     }
@@ -251,12 +272,12 @@ class TaskController extends Controller
                 'data' => new TaskResource($task),
             ], 200);
         } catch (\Exception $e) {
-            Log::error('Error al actualizar tarea: ' . $e->getMessage());
+            Log::error('Error al actualizar tarea: ' . $e->getMessage(), ['exception' => $e]);
 
             return response()->json([
                 'success' => false,
                 'message' => 'Error al actualizar la tarea.',
-                'errors' => ['server' => [$e->getMessage()]],
+                'errors' => ['server' => ['Ocurrió un error inesperado. Por favor, inténtelo de nuevo.']],
             ], 500);
         }
     }
@@ -278,12 +299,12 @@ class TaskController extends Controller
                 'message' => 'Tarea eliminada exitosamente.',
             ], 200);
         } catch (\Exception $e) {
-            Log::error('Error al eliminar tarea: ' . $e->getMessage());
+            Log::error('Error al eliminar tarea: ' . $e->getMessage(), ['exception' => $e]);
 
             return response()->json([
                 'success' => false,
                 'message' => 'Error al eliminar la tarea.',
-                'errors' => ['server' => [$e->getMessage()]],
+                'errors' => ['server' => ['Ocurrió un error inesperado. Por favor, inténtelo de nuevo.']],
             ], 500);
         }
     }
@@ -324,12 +345,12 @@ class TaskController extends Controller
                 'data' => new TaskResource($task),
             ], 200);
         } catch (\Exception $e) {
-            Log::error('Error al reasignar tarea: ' . $e->getMessage());
+            Log::error('Error al reasignar tarea: ' . $e->getMessage(), ['exception' => $e]);
 
             return response()->json([
                 'success' => false,
                 'message' => 'Error al reasignar la tarea.',
-                'errors' => ['server' => [$e->getMessage()]],
+                'errors' => ['server' => ['Ocurrió un error inesperado. Por favor, inténtelo de nuevo.']],
             ], 500);
         }
     }
@@ -355,12 +376,12 @@ class TaskController extends Controller
                 'data' => TaskHistoryResource::collection($histories),
             ], 200);
         } catch (\Exception $e) {
-            Log::error('Error al obtener historial de tarea: ' . $e->getMessage());
+            Log::error('Error al obtener historial de tarea: ' . $e->getMessage(), ['exception' => $e]);
 
             return response()->json([
                 'success' => false,
                 'message' => 'Error al obtener el historial de la tarea.',
-                'errors' => ['server' => [$e->getMessage()]],
+                'errors' => ['server' => ['Ocurrió un error inesperado. Por favor, inténtelo de nuevo.']],
             ], 500);
         }
     }
