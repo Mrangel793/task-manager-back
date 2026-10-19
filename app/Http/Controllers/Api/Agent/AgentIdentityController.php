@@ -2,7 +2,6 @@
 
 namespace App\Http\Controllers\Api\Agent;
 
-use App\Http\Controllers\Api\WhatsAppLinkController;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Agent\AgentLinkRequest;
 use App\Http\Requests\Agent\AgentPhoneRequest;
@@ -22,14 +21,19 @@ use Illuminate\Support\Facades\RateLimiter;
  */
 class AgentIdentityController extends Controller
 {
+    private const GLOBAL_FAIL_KEY = 'agent-link-fail:global';
+
     public function link(AgentLinkRequest $request): JsonResponse
     {
         $phone = $request->input('phone');
         $code = (string) $request->input('code');
-        $limiterKey = 'agent-link-fail:'.hash('sha256', $phone);
-        $maxFailures = (int) config('agent.link_max_failed_attempts', 5);
+        $phoneHash = WhatsAppLinkCode::hashPhone($phone);
+        $phoneKey = 'agent-link-fail:'.$phoneHash;
+        $maxPhoneFailures = WhatsAppLinkCode::maxFailedAttempts();
+        $maxGlobalFailures = (int) config('agent.link_global_max_failures', 50);
 
-        if (RateLimiter::tooManyAttempts($limiterKey, $maxFailures + 1)) {
+        if (RateLimiter::tooManyAttempts(self::GLOBAL_FAIL_KEY, $maxGlobalFailures + 1)
+            || RateLimiter::tooManyAttempts($phoneKey, $maxPhoneFailures + 1)) {
             return response()->json([
                 'success' => false,
                 'message' => 'Demasiados intentos fallidos. Genera un código nuevo e inténtalo más tarde.',
@@ -37,18 +41,17 @@ class AgentIdentityController extends Controller
         }
 
         try {
-            $result = DB::transaction(function () use ($phone, $code) {
+            $result = DB::transaction(function () use ($phone, $phoneHash, $code) {
                 $linkCode = WhatsAppLinkCode::where('code_hash', WhatsAppLinkCode::hashCode($code))
+                    ->where('phone_hash', $phoneHash)
                     ->latest('id')
                     ->lockForUpdate()
                     ->first();
 
-                if (! $linkCode) {
-                    return 'invalid';
-                }
-
-                if (! $linkCode->isUsable()) {
-                    $linkCode->increment('attempts');
+                if (! $linkCode || ! $linkCode->isUsable()) {
+                    // Cada fallo desde este número cuenta contra su código vigente;
+                    // al superar el máximo el código deja de servir.
+                    WhatsAppLinkCode::activeForPhone($phoneHash)->increment('attempts');
 
                     return 'invalid';
                 }
@@ -101,7 +104,7 @@ class AgentIdentityController extends Controller
         }
 
         if ($result === 'invalid') {
-            RateLimiter::hit($limiterKey, (int) config('agent.link_code_ttl_minutes', 10) * 60);
+            $this->registerFailure($phoneKey, $maxGlobalFailures);
 
             return response()->json([
                 'success' => false,
@@ -109,7 +112,7 @@ class AgentIdentityController extends Controller
             ], 422);
         }
 
-        RateLimiter::clear($limiterKey);
+        RateLimiter::clear($phoneKey);
 
         return response()->json([
             'success' => true,
@@ -158,12 +161,12 @@ class AgentIdentityController extends Controller
 
         try {
             $user->tokens()
-                ->where('name', WhatsAppLinkController::AGENT_TOKEN_NAME)
+                ->where('name', User::AGENT_TOKEN_NAME)
                 ->where('expires_at', '<', now())
                 ->delete();
 
             $expiresAt = now()->addMinutes((int) config('agent.token_ttl_minutes', 15));
-            $token = $user->createToken(WhatsAppLinkController::AGENT_TOKEN_NAME, ['agent'], $expiresAt);
+            $token = $user->createToken(User::AGENT_TOKEN_NAME, ['agent'], $expiresAt);
 
             return response()->json([
                 'success' => true,
@@ -196,6 +199,24 @@ class AgentIdentityController extends Controller
     private function usersWithoutOrgScope()
     {
         return User::withoutGlobalScope(OrganizationScope::class);
+    }
+
+    /**
+     * Cuenta el fallo por número y en el contador global de /link. Si el global
+     * supera el máximo, /link queda en 429 para todos hasta que pase la ventana.
+     */
+    private function registerFailure(string $phoneKey, int $maxGlobalFailures): void
+    {
+        $window = (int) config('agent.link_code_ttl_minutes', 10) * 60;
+
+        RateLimiter::hit($phoneKey, $window);
+
+        if (RateLimiter::hit(self::GLOBAL_FAIL_KEY, $window) === $maxGlobalFailures + 1) {
+            Log::warning('Agente: demasiados fallos globales en /link, se bloquea temporalmente la vinculacion', [
+                'failures' => $maxGlobalFailures + 1,
+                'window_seconds' => $window,
+            ]);
+        }
     }
 
     private function notFound(): JsonResponse

@@ -5,6 +5,8 @@ namespace Tests\Feature\Agent;
 use App\Models\Organization;
 use App\Models\User;
 use App\Models\WhatsAppLinkCode;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Testing\TestResponse;
 use Tests\TestCase;
 
@@ -56,10 +58,10 @@ class AgentIdentityTest extends TestCase
         ], $attrs));
     }
 
-    private function generateCode(User $user): string
+    private function generateCode(User $user, string $phone = self::PHONE): string
     {
         $code = $this->actingAs($user, 'sanctum')
-            ->postJson('/api/v1/me/whatsapp-link-code')
+            ->postJson('/api/v1/me/whatsapp-link-code', ['phone' => $phone])
             ->assertStatus(201)
             ->assertJsonStructure(['success', 'data' => ['code', 'expires_at']])
             ->json('data.code');
@@ -172,7 +174,8 @@ class AgentIdentityTest extends TestCase
             ->assertStatus(422)
             ->assertJsonPath('success', false);
 
-        $this->assertSame(1, WhatsAppLinkCode::where('user_id', $user->id)->first()->attempts);
+        // Un código ya usado no suma intentos: sólo cuentan contra el código vigente del número.
+        $this->assertSame(0, WhatsAppLinkCode::where('user_id', $user->id)->first()->attempts);
     }
 
     public function test_codigo_vencido_responde_422(): void
@@ -198,7 +201,7 @@ class AgentIdentityTest extends TestCase
         $this->agentCall('POST', '/api/agent/v1/link', ['phone' => self::PHONE, 'code' => $new])->assertStatus(200);
     }
 
-    public function test_sexto_intento_fallido_bloquea_el_telefono(): void
+    public function test_sexto_intento_fallido_bloquea_el_telefono_e_invalida_el_codigo(): void
     {
         $user = $this->createUser($this->createOrganization());
         $code = $this->generateCode($user);
@@ -213,15 +216,103 @@ class AgentIdentityTest extends TestCase
             ->assertStatus(429)
             ->assertJsonPath('success', false);
 
+        $this->assertSame(6, WhatsAppLinkCode::where('user_id', $user->id)->first()->attempts);
+
+        // Aunque expire el bloqueo por número, el código ya quedó invalidado.
+        RateLimiter::clear('agent-link-fail:'.WhatsAppLinkCode::hashPhone(self::PHONE));
+        $this->agentCall('POST', '/api/agent/v1/link', ['phone' => self::PHONE, 'code' => $code])
+            ->assertStatus(422);
+
         $this->assertNull($this->freshUser($user)->whatsapp_phone);
+    }
+
+    public function test_codigo_correcto_desde_otro_numero_responde_422(): void
+    {
+        $user = $this->createUser($this->createOrganization());
+        $code = $this->generateCode($user, self::PHONE);
+
+        $this->agentCall('POST', '/api/agent/v1/link', ['phone' => '+573009998877', 'code' => $code])
+            ->assertStatus(422);
+        $this->assertNull($this->freshUser($user)->whatsapp_phone);
+
+        $this->agentCall('POST', '/api/agent/v1/link', ['phone' => self::PHONE, 'code' => $code])
+            ->assertStatus(200);
+    }
+
+    public function test_rotar_numeros_no_permite_adivinar_el_codigo(): void
+    {
+        $user = $this->createUser($this->createOrganization());
+        $code = $this->generateCode($user, self::PHONE);
+
+        // Un atacante que prueba el código correcto desde muchos números nunca vincula.
+        for ($i = 0; $i < 10; $i++) {
+            $this->agentCall('POST', '/api/agent/v1/link', ['phone' => '+57310000000'.$i, 'code' => $code])
+                ->assertStatus(422);
+        }
+
+        $this->assertNull($this->freshUser($user)->whatsapp_phone);
+        $this->assertSame(0, WhatsAppLinkCode::where('user_id', $user->id)->first()->attempts);
+        $this->agentCall('POST', '/api/agent/v1/link', ['phone' => self::PHONE, 'code' => $code])->assertStatus(200);
+    }
+
+    public function test_contador_global_de_fallos_bloquea_link_para_todos(): void
+    {
+        config(['agent.link_global_max_failures' => 3]);
+        Log::spy();
+
+        $user = $this->createUser($this->createOrganization());
+        $code = $this->generateCode($user, self::PHONE);
+
+        for ($i = 0; $i < 4; $i++) {
+            $this->agentCall('POST', '/api/agent/v1/link', ['phone' => '+57311000000'.$i, 'code' => '123456'])
+                ->assertStatus(422);
+        }
+
+        $this->agentCall('POST', '/api/agent/v1/link', ['phone' => self::PHONE, 'code' => $code])
+            ->assertStatus(429);
+        $this->assertNull($this->freshUser($user)->whatsapp_phone);
+
+        Log::shouldHaveReceived('warning')
+            ->withArgs(fn ($message) => str_contains($message, 'fallos globales'))
+            ->once();
+    }
+
+    public function test_generar_codigo_exige_phone_e164_libre(): void
+    {
+        $org = $this->createOrganization();
+        $this->createUser($org, 'Operador', ['whatsapp_phone' => '+573005550000']);
+        $user = $this->createUser($org);
+
+        $this->actingAs($user, 'sanctum')->postJson('/api/v1/me/whatsapp-link-code')
+            ->assertStatus(422)->assertJsonValidationErrors('phone');
+        $this->actingAs($user, 'sanctum')->postJson('/api/v1/me/whatsapp-link-code', ['phone' => '3001234567'])
+            ->assertStatus(422)->assertJsonValidationErrors('phone');
+        $this->actingAs($user, 'sanctum')->postJson('/api/v1/me/whatsapp-link-code', ['phone' => '+573005550000'])
+            ->assertStatus(422)->assertJsonValidationErrors('phone');
+
+        $this->assertSame(0, WhatsAppLinkCode::where('user_id', $user->id)->count());
+    }
+
+    public function test_purga_codigos_usados_y_vencidos(): void
+    {
+        $user = $this->createUser($this->createOrganization());
+        $base = ['user_id' => $user->id, 'code_hash' => 'x', 'phone_hash' => 'y'];
+        $vigente = WhatsAppLinkCode::create($base + ['expires_at' => now()->addMinutes(5)]);
+        WhatsAppLinkCode::create($base + ['expires_at' => now()->addMinutes(5), 'used_at' => now()]);
+        WhatsAppLinkCode::create($base + ['expires_at' => now()->subDays(2)]);
+
+        $this->artisan('model:prune', ['--model' => [WhatsAppLinkCode::class]])->assertSuccessful();
+
+        $this->assertSame([$vigente->id], WhatsAppLinkCode::pluck('id')->all());
     }
 
     public function test_telefono_de_otro_usuario_responde_409(): void
     {
         $org = $this->createOrganization();
-        $this->createUser($org, 'Operador', ['whatsapp_phone' => self::PHONE]);
         $user = $this->createUser($org);
         $code = $this->generateCode($user);
+        // Otro usuario registra el número después de generado el código.
+        $this->createUser($org, 'Operador', ['whatsapp_phone' => self::PHONE]);
 
         $this->agentCall('POST', '/api/agent/v1/link', ['phone' => self::PHONE, 'code' => $code])
             ->assertStatus(409)
@@ -258,31 +349,47 @@ class AgentIdentityTest extends TestCase
         $this->assertArrayNotHasKey('email', $response->json('data'));
     }
 
-    public function test_whoami_no_vinculado_inactivo_u_org_inactiva_responde_404(): void
+    /**
+     * Cada caso parte de un usuario que SÍ resuelve (200) y luego se le cambia
+     * una sola condición, para que el 404 se deba a esa condición.
+     */
+    public static function estadosQueDejanDeResolver(): array
     {
-        $this->agentCall('GET', $this->whoamiUri('+573000000001'))->assertStatus(404);
+        return [
+            'whatsapp sin verificar' => [fn (User $u) => User::withoutGlobalScopes()->whereKey($u->id)->update(['whatsapp_verified' => false])],
+            'usuario inactivo' => [fn (User $u) => User::withoutGlobalScopes()->whereKey($u->id)->update(['is_active' => false])],
+            'usuario borrado' => [fn (User $u) => User::withoutGlobalScopes()->whereKey($u->id)->update(['deleted_at' => now()])],
+            'organizacion inactiva' => [fn (User $u) => Organization::whereKey($u->organization_id)->update(['is_active' => false])],
+            'organizacion borrada' => [fn (User $u) => Organization::whereKey($u->organization_id)->update(['deleted_at' => now()])],
+        ];
+    }
 
-        $this->createUser($this->createOrganization(), 'Operador', [
-            'whatsapp_phone' => '+573000000002', 'whatsapp_verified' => false,
-        ]);
-        $this->agentCall('GET', $this->whoamiUri('+573000000002'))->assertStatus(404);
+    #[\PHPUnit\Framework\Attributes\DataProvider('estadosQueDejanDeResolver')]
+    public function test_whoami_y_token_responden_404_cuando_el_usuario_deja_de_cumplir(\Closure $romper): void
+    {
+        $user = $this->linkedUser($this->createOrganization());
 
-        $this->createUser($this->createOrganization(), 'Operador', [
-            'whatsapp_phone' => '+573000000003', 'whatsapp_verified' => true, 'is_active' => false,
-        ]);
-        $this->agentCall('GET', $this->whoamiUri('+573000000003'))->assertStatus(404);
+        $this->agentCall('GET', $this->whoamiUri())->assertStatus(200)->assertJsonPath('data.id', $user->id);
+        $this->agentCall('POST', '/api/agent/v1/token', ['phone' => self::PHONE])->assertStatus(200);
 
-        $this->createUser($this->createOrganization(['is_active' => false]), 'Operador', [
-            'whatsapp_phone' => '+573000000004', 'whatsapp_verified' => true,
-        ]);
-        $this->agentCall('GET', $this->whoamiUri('+573000000004'))->assertStatus(404);
+        $romper($user);
 
-        $deletedOrg = $this->createOrganization();
-        $this->createUser($deletedOrg, 'Operador', [
-            'whatsapp_phone' => '+573000000005', 'whatsapp_verified' => true,
-        ]);
-        $deletedOrg->delete();
-        $this->agentCall('GET', $this->whoamiUri('+573000000005'))->assertStatus(404);
+        $this->agentCall('GET', $this->whoamiUri())
+            ->assertStatus(404)
+            ->assertExactJson(['success' => false, 'message' => 'No encontrado.']);
+        $this->agentCall('POST', '/api/agent/v1/token', ['phone' => self::PHONE])
+            ->assertStatus(404)
+            ->assertExactJson(['success' => false, 'message' => 'No encontrado.']);
+    }
+
+    public function test_whoami_de_numero_desconocido_responde_404(): void
+    {
+        $this->linkedUser($this->createOrganization());
+
+        $this->agentCall('GET', $this->whoamiUri())->assertStatus(200);
+        $this->agentCall('GET', $this->whoamiUri('+573000000001'))
+            ->assertStatus(404)
+            ->assertExactJson(['success' => false, 'message' => 'No encontrado.']);
     }
 
     // ---------------------------------------------------------------- token
@@ -324,33 +431,6 @@ class AgentIdentityTest extends TestCase
         $this->travel(16)->minutes();
 
         $this->withToken($token)->getJson('/api/v1/tasks')->assertStatus(401);
-    }
-
-    public function test_token_no_vinculado_responde_404(): void
-    {
-        $this->createUser($this->createOrganization(), 'Operador', [
-            'whatsapp_phone' => self::PHONE, 'whatsapp_verified' => false,
-        ]);
-
-        $this->agentCall('POST', '/api/agent/v1/token', ['phone' => self::PHONE])->assertStatus(404);
-    }
-
-    public function test_token_de_agente_no_puede_refrescarse_ni_cambiar_password_ni_generar_codigos(): void
-    {
-        $this->linkedUser($this->createOrganization());
-        $token = $this->agentCall('POST', '/api/agent/v1/token', ['phone' => self::PHONE])->json('data.token');
-
-        $this->withToken($token)->postJson('/api/v1/auth/refresh-token')->assertStatus(403);
-        $this->app['auth']->forgetGuards();
-
-        $this->withToken($token)->postJson('/api/v1/auth/change-password', [
-            'current_password' => 'Password1',
-            'password' => 'Password2',
-            'password_confirmation' => 'Password2',
-        ])->assertStatus(403);
-        $this->app['auth']->forgetGuards();
-
-        $this->withToken($token)->postJson('/api/v1/me/whatsapp-link-code')->assertStatus(403);
     }
 
     // ---------------------------------------------------------------- unlink

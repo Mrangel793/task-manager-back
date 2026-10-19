@@ -14,6 +14,11 @@ Schedule::command('tasks:send-reminders')
     ->withoutOverlapping()
     ->runInBackground();
 
+// Purga de códigos de vinculación de WhatsApp usados o vencidos
+Schedule::command('model:prune', ['--model' => [\App\Models\WhatsAppLinkCode::class]])
+    ->dailyAt('03:30')
+    ->withoutOverlapping();
+
 // Cleanup Old Notifications - Run daily at 3:00 AM
 Schedule::command('notifications:cleanup')
     ->dailyAt('03:00')

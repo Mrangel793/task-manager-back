@@ -12,6 +12,7 @@ use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Illuminate\Support\Facades\Hash;
 use Laravel\Sanctum\HasApiTokens;
+use Laravel\Sanctum\PersonalAccessToken;
 use NotificationChannels\WebPush\HasPushSubscriptions;
 use Spatie\Permission\Traits\HasRoles;
 
@@ -47,6 +48,8 @@ class User extends Authenticatable
      * Los lugares que necesitan consultas cross-org ya usan withoutGlobalScopes().
      */
     protected static bool $organizationScopeFailClosed = false;
+
+    public const AGENT_TOKEN_NAME = 'whatsapp-agent';
 
     /**
      * The attributes that are mass assignable.
@@ -118,6 +121,52 @@ class User extends Authenticatable
                 $user->whatsapp_verified = false;
             }
         });
+
+        // Un número nuevo o una verificación retirada invalida los tokens del agente.
+        static::updated(function (User $user) {
+            if ($user->wasChanged('whatsapp_phone')
+                || ($user->wasChanged('whatsapp_verified') && ! $user->whatsapp_verified)) {
+                $user->revokeAgentTokens();
+            }
+        });
+
+        static::deleting(function (User $user) {
+            if (! $user->isForceDeleting()) {
+                $user->releaseUniqueFields();
+            }
+        });
+    }
+
+    /**
+     * Libera email, teléfono y WhatsApp antes del soft-delete para que se puedan
+     * reutilizar, y corta el acceso del agente de WhatsApp.
+     */
+    public function releaseUniqueFields(): void
+    {
+        $this->forceFill([
+            'email' => null,
+            'phone' => null,
+            'whatsapp_phone' => null,
+            'whatsapp_verified' => false,
+        ])->saveQuietly();
+
+        $this->revokeAgentTokens();
+        WhatsAppLinkCode::where('user_id', $this->id)->whereNull('used_at')->delete();
+    }
+
+    public function revokeAgentTokens(): void
+    {
+        $this->tokens()->where('name', self::AGENT_TOKEN_NAME)->delete();
+    }
+
+    /**
+     * La petición actual llega con un token del agente (ability "agent" sin "*").
+     */
+    public function isUsingAgentToken(): bool
+    {
+        $token = $this->currentAccessToken();
+
+        return $token instanceof PersonalAccessToken && ! $token->can('*') && $token->can('agent');
     }
 
     /**

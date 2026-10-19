@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\StoreWhatsAppLinkCodeRequest;
 use App\Models\WhatsAppLinkCode;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -14,22 +15,21 @@ use Illuminate\Support\Facades\Log;
  */
 class WhatsAppLinkController extends Controller
 {
-    public const AGENT_TOKEN_NAME = 'whatsapp-agent';
-
     /**
-     * Genera un código de 6 dígitos (válido 10 min) e invalida los anteriores.
-     * El código en claro sólo se devuelve en esta respuesta.
+     * Genera un código de 6 dígitos (válido 10 min) atado al número indicado e
+     * invalida los anteriores. El código en claro sólo se devuelve en esta respuesta.
      */
-    public function createCode(Request $request): JsonResponse
+    public function createCode(StoreWhatsAppLinkCodeRequest $request): JsonResponse
     {
         try {
             $user = $request->user();
+            $phoneHash = WhatsAppLinkCode::hashPhone($request->input('phone'));
             $expiresAt = now()->addMinutes((int) config('agent.link_code_ttl_minutes', 10));
 
-            $code = DB::transaction(function () use ($user, $expiresAt) {
+            $code = DB::transaction(function () use ($user, $phoneHash, $expiresAt) {
                 WhatsAppLinkCode::where('user_id', $user->id)->whereNull('used_at')->delete();
 
-                // Evita que dos códigos vigentes de distintos usuarios coincidan.
+                // Evita que dos códigos vigentes coincidan.
                 do {
                     $code = str_pad((string) random_int(0, 999999), 6, '0', STR_PAD_LEFT);
                     $hash = WhatsAppLinkCode::hashCode($code);
@@ -41,6 +41,7 @@ class WhatsAppLinkController extends Controller
                 WhatsAppLinkCode::create([
                     'user_id' => $user->id,
                     'code_hash' => $hash,
+                    'phone_hash' => $phoneHash,
                     'expires_at' => $expiresAt,
                 ]);
 
@@ -49,7 +50,7 @@ class WhatsAppLinkController extends Controller
 
             return response()->json([
                 'success' => true,
-                'message' => 'Envía este código al agente por WhatsApp para vincular tu número.',
+                'message' => 'Envía este código al agente desde ese número de WhatsApp para vincularlo.',
                 'data' => [
                     'code' => $code,
                     'expires_at' => $expiresAt->toIso8601String(),
@@ -81,7 +82,7 @@ class WhatsAppLinkController extends Controller
                 ])->save();
 
                 WhatsAppLinkCode::where('user_id', $user->id)->whereNull('used_at')->delete();
-                $user->tokens()->where('name', self::AGENT_TOKEN_NAME)->delete();
+                $user->revokeAgentTokens();
             });
 
             return response()->json([

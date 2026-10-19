@@ -56,14 +56,26 @@ signed("GET", "/api/agent/v1/whoami?phone=" + quote("+573001234567", safe=""))
 
 Rate limit: 120 req/min por IP en todo el grupo; `/link` además 30 req/min.
 
+**Nonces y cache.** Los nonces usados viven 10 min en la cache de Laravel (`CACHE_STORE`).
+`php artisan cache:clear` (o `optimize:clear`, que lo incluye) los borra: durante los 5 min
+siguientes una petición capturada podría reenviarse una vez más. Igual pasa con los
+contadores de intentos fallidos de `/link`. Evita limpiar la cache en producción salvo que
+haga falta y, si se hace, considera rotar `AGENT_HMAC_SECRET`. Con `CACHE_STORE=file` o
+`database` el registro del nonce no es estrictamente atómico ante peticiones simultáneas;
+`redis` sí lo es.
+
 ## 2. Rutas del usuario (auth:sanctum, token normal de la app)
 
 ### `POST /api/v1/me/whatsapp-link-code`
 
-Genera un código de 6 dígitos válido 10 min e invalida los códigos pendientes del usuario.
-El código sólo se devuelve en esta respuesta (se guarda su HMAC). Límite: 5/min.
+Body: `{"phone": "+573001234567"}` (E.164, el número de WhatsApp que se va a vincular).
+
+Genera un código de 6 dígitos válido 10 min **atado a ese número** e invalida los códigos
+pendientes del usuario. Se guardan sólo el HMAC del código y el del número (con `APP_KEY`);
+el código en claro sólo se devuelve en esta respuesta. Límite: 5/min.
 
 - `201 {"success": true, "message": "...", "data": {"code": "042817", "expires_at": "2026-10-19T15:10:00-05:00"}}`
+- `422` con `errors.phone` si falta, no es E.164 o ya es el WhatsApp de otro usuario.
 - `401` sin token. `403` si se llama con un token de agente.
 
 ### `DELETE /api/v1/me/whatsapp`
@@ -72,21 +84,29 @@ Desvincula: `whatsapp_phone = null`, `whatsapp_verified = false`, borra códigos
 **revoca los tokens de agente vigentes** del usuario.
 
 - `200 {"success": true, "message": "WhatsApp desvinculado."}`
+- `403` si se llama con un token de agente (el usuario desvincula desde la app).
 
 ## 3. Rutas del agente (`agent.hmac`)
 
 ### `POST /api/agent/v1/link`
 
-Body: `{"phone": "+573001234567", "code": "042817"}` (`phone` en E.164; `code` 6 dígitos,
-mándalo como string para no perder ceros a la izquierda).
+Body: `{"phone": "+573001234567", "code": "042817"}` (`phone` en E.164 = el número que
+escribe al agente; `code` 6 dígitos, mándalo como string para no perder ceros a la izquierda).
+
+El código sólo sirve desde **el mismo número** que el usuario indicó al generarlo: el mismo
+código enviado desde otro número responde 422, así que rotar números no ayuda a adivinarlo.
 
 | Respuesta | Cuándo |
 |-----------|--------|
-| `200 {"success": true, "data": {"user_id", "name", "organization": {"id", "name"}}}` | código vigente; el usuario queda con `whatsapp_phone = phone` y `whatsapp_verified = true` |
-| `409 {"success": false, "message": "..."}` | ese teléfono ya pertenece a otro usuario (el código no se consume) |
-| `422 {"success": false, "message": "Código inválido o vencido."}` | código inexistente, vencido o ya usado; usuario o organización inactivos |
+| `200 {"success": true, "data": {"user_id", "name", "organization": {"id", "name"}}}` | código vigente para ese número; el usuario queda con `whatsapp_phone = phone` y `whatsapp_verified = true` |
+| `409 {"success": false, "message": "..."}` | ese teléfono pasó a ser de otro usuario después de generar el código (el código no se consume) |
+| `422 {"success": false, "message": "Código inválido o vencido."}` | código inexistente, de otro número, vencido, ya usado o invalidado por intentos; usuario u organización inactivos |
 | `422` con `errors` | `phone` no E.164 o `code` sin 6 dígitos |
-| `429` | ese teléfono acumuló más de 5 intentos fallidos en 10 min: queda bloqueado hasta que pase la ventana |
+| `429` | ese número acumuló más de 5 fallos en 10 min, **o** `/link` acumuló más de 50 fallos en total en 10 min (bloqueo global para todos, con `Log::warning`) |
+
+Intentos: cada fallo desde un número suma `attempts` al código vigente de ese número; al
+6º fallo el código queda invalidado aunque luego se envíe el correcto (hay que generar otro).
+Los códigos usados o vencidos se purgan a diario con `model:prune` (scheduler, 03:30).
 
 ### `GET /api/agent/v1/whoami?phone=%2B573001234567`
 
@@ -110,9 +130,34 @@ El token es un personal access token de Sanctum con nombre `whatsapp-agent`, abi
 vencimiento responde 401: pide otro token. Los tokens vencidos del usuario se purgan al
 emitir uno nuevo.
 
-Con un token de agente están **bloqueadas** (403): `POST /api/v1/auth/refresh-token`
-(lo volvería permanente), `POST /api/v1/auth/change-password` y
-`POST /api/v1/me/whatsapp-link-code`.
+### Lista blanca del token de agente (`agent.allowlist`)
+
+Con un token de agente sólo responden estas rutas `/api/v1`; **cualquier otra da 403**
+(`"Esta acción no está permitida con un token de agente."`). Además aplica el RBAC normal
+(p. ej. `tasks.destroy` exige `delete-tasks`, `contacts.*` exige `view-contacts`).
+
+| Grupo | Rutas (nombre) |
+|-------|----------------|
+| Perfil | `GET auth/me` (`api.auth.me`) |
+| Tareas | `GET tasks`, `GET tasks/{id}`, `POST tasks`, `PATCH/PUT tasks/{id}`, `DELETE tasks/{id}`, `POST tasks/{id}/reassign`, `GET tasks/{id}/history`, `GET/POST tasks/{id}/comments`, `DELETE tasks/{id}/comments/{c}` |
+| Proyectos | `GET projects`, `GET projects/summary`, `GET projects/{id}`, `GET projects/{id}/tasks`, `POST projects`, `GET projects/{id}/members`, `POST projects/{id}/members` |
+| Contactos | `GET contacts`, `GET contacts/{id}`, `POST contacts` (sin export ni grant/revoke) |
+| Notificaciones | `GET notifications`, `GET notifications/unread-count` |
+
+Quedan fuera, entre otras: gestión de usuarios (`users*`), `PATCH auth/me`, refresh-token,
+change-password, logout, `me/whatsapp*`, Google Calendar, push, tabs, editar/borrar
+proyectos, quitar miembros, editar/borrar/exportar contactos y marcar notificaciones.
+La lista vive en `App\Http\Middleware\AgentTokenAllowlist::ALLOWED_ROUTES`; una ruta nueva
+queda bloqueada para el agente hasta que se agregue ahí.
+
+### Cuándo deja de servir un token de agente
+
+- Vence a los 15 min (401).
+- El usuario queda inactivo, pierde `whatsapp_verified` o su organización se desactiva: la
+  siguiente petición responde 401 y el token se borra.
+- Se cambia el `whatsapp_phone` del usuario (desde gestión de usuarios o desde su perfil), se
+  le quita la verificación, se desvincula o se borra el usuario: se revocan todos sus tokens
+  `whatsapp-agent`. Al borrar un usuario también se liberan su email, teléfono y WhatsApp.
 
 ## Lecturas por SQL
 

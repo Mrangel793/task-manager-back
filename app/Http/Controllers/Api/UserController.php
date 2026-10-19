@@ -310,14 +310,7 @@ class UserController extends Controller
                 ], 422);
             }
 
-            // Nullify unique fields before soft-deleting so they can be reused
-            $user->forceFill([
-                'email' => null,
-                'phone' => null,
-                'whatsapp_phone' => null,
-            ])->saveQuietly();
-
-            // Soft delete
+            // Soft delete (User::deleting libera email, teléfono y WhatsApp para reutilizarlos)
             $user->delete();
 
             // Invalidate operador IDs cache

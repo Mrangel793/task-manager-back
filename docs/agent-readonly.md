@@ -35,6 +35,63 @@ tabla ni por columna). Si el agente tuviera `SELECT` sobre la BD principal leer�
 > usuario resuelto con `whoami`. La BD no puede hacer ese filtro por él (no hay contexto de
 > usuario en la conexión SQL del agente).
 
+## OBLIGATORIO para el ejecutor del agente: alcance por rol en SQL
+
+La conexión SQL del agente ve todo. Cada consulta que el agente haga **en nombre de un
+usuario** tiene que aplicar el mismo alcance que la API aplica a ese usuario. Regla general:
+
+1. **Preferir la API.** Si la pregunta depende del rol ("mis tareas", "tareas de mi equipo",
+   "¿puedo ver X?"), respóndela con `GET /api/v1/...` usando el token del usuario
+   (`POST /api/agent/v1/token`): la API ya aplica organización, rol y permisos. Usa SQL sólo
+   para agregados o búsquedas que la API no ofrece, y siempre con las reglas de abajo.
+2. **Siempre** `organization_id = :org_id` (el `organization.id` de `whoami`) en cada vista.
+3. Rol = el de `whoami.roles` (spatie). Si trae varios, usa el de mayor alcance en este orden:
+   `Admin` > `Supervisor` > `Operador`, igual que el código (`hasRole('Admin')` primero).
+
+Reglas copiadas del código (`TaskController@index`, `CheckTaskPermissions`, `Project::scopeVisibleTo`,
+rutas de contactos). `:me` es el `id` de `whoami`.
+
+### Listar tareas (`v_tasks`, equivalente a `GET /api/v1/tasks`)
+
+| Rol | Condición adicional |
+|-----|---------------------|
+| Admin | `(creator_id = :me OR assignee_id = :me)` (sí: en el listado el Admin sólo ve las que creó o tiene asignadas) |
+| Supervisor | `(assignee_id = :me OR creator_id = :me OR assignee_id IN (SELECT id FROM v_users WHERE organization_id = :org_id AND FIND_IN_SET('Operador', spatie_roles)))` |
+| Operador (y cualquier otro) | `(assignee_id = :me OR creator_id = :me)` |
+
+### Ver una tarea concreta, su historial o sus comentarios (`v_tasks`, `v_task_histories`, `v_task_comments`)
+
+Equivale a `GET tasks/{id}`, `tasks/{id}/history` y `tasks/{id}/comments` (middleware
+`CheckTaskPermissions`). Primero confirma que la tarea es de `:org_id` y luego:
+
+| Rol | Puede ver la tarea si |
+|-----|-----------------------|
+| Admin | cualquier tarea de su organización |
+| Supervisor | `assignee_id = :me OR creator_id = :me OR` el asignado tiene rol `Operador` |
+| Operador | `assignee_id = :me OR creator_id = :me` |
+
+`v_task_histories` y `v_task_comments` sólo se consultan para tareas que pasen esta regla
+(`WHERE task_id IN (...)`), nunca por organización completa.
+
+### Proyectos (`v_projects`, `v_project_members`)
+
+Cualquier rol ve un proyecto si
+`visibility = 'todos' OR created_by = :me OR EXISTS (SELECT 1 FROM v_project_members m WHERE m.project_id = p.id AND m.user_id = :me)`.
+Nota: `GET projects/{id}/tasks` devuelve **todas** las tareas del proyecto visible, sin
+filtrar por rol; si el agente replica eso por SQL, que sea consciente de que es lo que hace
+la API hoy.
+
+### Contactos (`v_contacts`)
+
+Sólo si `whoami.permissions` incluye `view-contacts` (Admin lo tiene por defecto; a otros se
+les da con `contacts/grant-access`). Sin ese permiso, **ninguna** consulta a `v_contacts`.
+Con permiso, ve todos los contactos de su organización.
+
+### Usuarios y organizaciones (`v_users`, `v_organizations`)
+
+`v_users` filtrado por `organization_id = :org_id` (sirve para resolver nombres de
+asignados). `v_organizations` sólo la fila `id = :org_id`.
+
 ## Pasos en cPanel
 
 1. **Crear la BD de vistas.** cPanel → *MySQL® Databases* → *Create New Database*:
@@ -72,6 +129,14 @@ tabla ni por columna). Si el agente tuviera `SELECT` sobre la BD principal leer�
    SELECT * FROM <cpaneluser>_agentro.v_users LIMIT 1;    -- OK, sin email/password/tokens
    INSERT INTO <cpaneluser>_agentro.v_tasks (id) VALUES ('X'); -- debe fallar: INSERT command denied
    ```
+
+## Cache de la app (`cache:clear`)
+
+Las vistas no dependen de la cache. Pero la API del agente sí: los nonces HMAC y los
+contadores de intentos fallidos de `/link` viven en la cache de Laravel. Correr
+`php artisan cache:clear` u `optimize:clear` en producción los borra (ver
+[agent-api.md](agent-api.md#1-autenticación-hmac-del-servicio-agenthmac)). `config:clear`
+no los toca.
 
 ## Advertencias verificadas en MariaDB 10.6.28 (contenedor `mariadb:10.6`)
 

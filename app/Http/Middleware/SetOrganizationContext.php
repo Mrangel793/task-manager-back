@@ -22,6 +22,25 @@ class SetOrganizationContext
         // Load organization if not loaded
         $organization = $user->organization;
 
+        // Un token de agente deja de servir si el usuario ya no está activo, perdió la
+        // verificación de WhatsApp o su organización se desactivó: se borra y se responde 401.
+        if ($user->isUsingAgentToken()
+            && (!$user->is_active || !$user->whatsapp_verified || !$organization || !$organization->is_active)) {
+            $user->currentAccessToken()->delete();
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Unauthenticated.',
+            ], 401);
+        }
+
+        if (!$user->is_active) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Tu cuenta está inactiva. Contacta al administrador.',
+            ], 403);
+        }
+
         if (!$organization || !$organization->is_active) {
             return response()->json([
                 'success' => false,

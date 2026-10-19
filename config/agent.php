@@ -26,6 +26,8 @@ return [
 
     'link_max_failed_attempts' => 5,
 
+    'link_global_max_failures' => 50,
+
     'readonly_database' => env('AGENT_RO_DATABASE'),
 
 ];

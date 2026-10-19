@@ -12,12 +12,14 @@ return new class extends Migration
             $table->id();
             $table->foreignUuid('user_id')->constrained()->cascadeOnDelete();
             $table->string('code_hash', 64);
+            $table->string('phone_hash', 64);
             $table->timestamp('expires_at');
             $table->timestamp('used_at')->nullable();
             $table->unsignedTinyInteger('attempts')->default(0);
             $table->timestamps();
 
-            $table->index(['code_hash', 'used_at', 'expires_at']);
+            $table->index(['code_hash', 'phone_hash']);
+            $table->index(['phone_hash', 'used_at', 'expires_at']);
             $table->index(['user_id', 'used_at']);
         });
     }
